@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.32002.261
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlowServer", "FlowServer.csproj", "{3C6BBBFE-2B1F-41BB-BEDB-95FC7AF81BF8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlowServer", "FlowServer.csproj", "{70859D0A-FF37-4445-820B-2273D378B413}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,15 +11,15 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3C6BBBFE-2B1F-41BB-BEDB-95FC7AF81BF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3C6BBBFE-2B1F-41BB-BEDB-95FC7AF81BF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3C6BBBFE-2B1F-41BB-BEDB-95FC7AF81BF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3C6BBBFE-2B1F-41BB-BEDB-95FC7AF81BF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{70859D0A-FF37-4445-820B-2273D378B413}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70859D0A-FF37-4445-820B-2273D378B413}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70859D0A-FF37-4445-820B-2273D378B413}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70859D0A-FF37-4445-820B-2273D378B413}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {896FF334-BE74-4D3F-8729-D8C0984FB4CE}
+		SolutionGuid = {A311FBB5-2250-4A6E-ABDA-965976D65EBA}
 	EndGlobalSection
 EndGlobal

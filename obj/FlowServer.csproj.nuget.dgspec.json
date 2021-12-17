@@ -46,9 +46,9 @@
         "net5.0": {
           "targetAlias": "net5.0",
           "dependencies": {
-            "TensorFlow.NET": {
+            "Swashbuckle.AspNetCore": {
               "target": "Package",
-              "version": "[0.60.5, )"
+              "version": "[5.6.3, )"
             }
           },
           "imports": [
