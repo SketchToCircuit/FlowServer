@@ -1,0 +1,1 @@
+uvicorn --reload FlowServer.asgi:app --port 3002
