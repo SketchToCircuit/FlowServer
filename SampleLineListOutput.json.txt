@@ -1,0 +1,16 @@
+[ #Array of nets
+  [ #Array of points in network
+    {
+      "Pos": { #Postion of point
+        "X": 120,
+        "Y": 120
+      },
+      "Connected": [ #Array of postion of connected points
+        {
+          "X": 120,
+          "Y": 120
+        }
+      ]
+    }
+  ]
+]

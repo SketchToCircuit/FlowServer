@@ -1,15 +1,20 @@
-[
+[#Array of Components
   {
-    "component": "R",
-    "position": {
+    "component": "R", #Component identifier
+    "position": { #Component position
       "X": 120,
       "Y": 120
     },
     "pins": [
       {
+        "X": 120, #Pin position
+        "Y": 120,
+        "ID": 1 #Netlist ID
+      },
+      {
         "X": 120,
         "Y": 120,
-        "ID": 1
+        "ID": 2
       }
     ]
   },
@@ -24,6 +29,11 @@
         "X": 120,
         "Y": 120,
         "ID": 1
+      },
+      {
+        "X": 120,
+        "Y": 120,
+        "ID": 2
       }
     ]
   }
