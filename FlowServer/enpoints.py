@@ -18,30 +18,31 @@ class Neural:
         imageBase64 = data["image"]
 
         #Send picture data to TensorflowServing for evaluation
-        neuralOutput = requests.post('http://localhost:8501/v1/models/nn:predict', data = json.dumps({"image": imageBase64}))
+        req = '{"inputs":{"image":"'+imageBase64+'"}}'
+        neuralOutput = requests.post('http://localhost:8501/v1/models/CompleteModel/versions/1:predict', data=req)
 
         #Use linedetection to generate netlist and linelist
-        netList,lineList = LineDetection.detect(neuralOutput, imageBase64)
+        # netList,lineList = LineDetection.detect(neuralOutput, imageBase64)
 
-        #Build output json
-        output = "{"
-        convert = [False,False]
-        #Check which formats were chossen
-        for i in range(0, len(outputMethodes)):
-            if(outputMethodes[i] == "netlist"):
-                convert[0] = True
-            if(outputMethodes[i] == "latex"):
-                convert[1] = True
+        # #Build output json
+        # output = "{"
+        # convert = [False,False]
+        # #Check which formats were chossen
+        # for i in range(0, len(outputMethodes)):
+        #     if(outputMethodes[i] == "netlist"):
+        #         convert[0] = True
+        #     if(outputMethodes[i] == "latex"):
+        #         convert[1] = True
         
-        if(convert[0]):
-            #If chossen add netlist to response
-            output += "netlist:" + netList
-            if(convert[1]): output += ","
-        if(convert[1]):
-            #If chossen add Latex code to response
-            output += '"latex:"' + Latex.ListToLatex(netList,lineList)
-        output += "}"
+        # if(convert[0]):
+        #     #If chossen add netlist to response
+        #     output += "netlist:" + netList
+        #     if(convert[1]): output += ","
+        # if(convert[1]):
+        #     #If chossen add Latex code to response
+        #     output += '"latex:"' + Latex.ListToLatex(netList,lineList)
+        # output += "}"
 
         #Send back requested data
-        resp.media = json.loads(output)
+        resp.media = neuralOutput.json()
         resp.status = 200

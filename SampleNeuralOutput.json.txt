@@ -1,0 +1,36 @@
+[#Array of components
+  {
+    "component": "R", #Component identifier
+    "position": { #Component position
+      "X": 130,
+      "Y": 120
+    },
+    "pins": [ #Array of pins
+      {#Postion of pin
+        "X": 120, 
+        "Y": 120
+      },
+      {
+        "X": 140,
+        "Y": 120
+      }
+    ]
+  },
+  {
+    "component": "C",
+    "position": {
+      "X": 160,
+      "Y": 120
+    },
+    "pins": [
+      {
+        "X": 150,
+        "Y": 120
+      },
+      {
+        "X": 170,
+        "Y": 120
+      }
+    ]
+  }
+]

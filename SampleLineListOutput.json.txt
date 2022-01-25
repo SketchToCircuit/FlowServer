@@ -1,16 +1,20 @@
-[ #Array of nets
-  [ #Array of points in network
+// Patricks Vorschlag
+{
+  "Nets": [ // Array of nets
     {
-      "Pos": { #Postion of point
-        "X": 120,
-        "Y": 120
-      },
-      "Connected": [ #Array of postion of connected points
+      "Points": [ // Array of points in net
         {
-          "X": 120,
-          "Y": 120
+          "Pos": { // Postion of point
+            "X": 120,
+            "Y": 120
+          },
+          "ID": 42, // ID of point
+          "Connected": [  // Array of IDs of connected points
+            42,
+            111
+          ]
         }
       ]
     }
   ]
-]
+}
