@@ -1,2 +1,2 @@
-def detect(neuralOutput):
+def detect(neuralOutput, img):
     return None
