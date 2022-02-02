@@ -51,7 +51,7 @@ class Neural:
                     return
         #Send picture data to TensorflowServing for evaluation
         image = utils.normalizeAvgLineThickness(utils.decodeBase64(imageBase64), goal_thickness=4)
-        req = '{"inputs":{"image":"'+str(imageBase64)+'"}}'
+        req = '{"inputs":{"image":"'+str(base64.urlsafe_b64encode(cv2.imencode('.jpg', image)))+'"}}'
         try:
             neuralOutput = requests.post('http://localhost:8501/v1/models/CompleteModel/versions/1:predict', data=req)
         except:
