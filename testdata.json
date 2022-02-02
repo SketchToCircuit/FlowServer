@@ -1,0 +1,188 @@
+[
+    {
+        "component": "PIN",
+        "topleft": {
+            "x": 664,
+            "y": 99
+        },
+        "bottomright": {
+            "x": 796,
+            "y": 136
+        },
+        "pins": [
+            {
+                "x": 786,
+                "y": 109
+            }
+        ]
+    },
+    {
+        "component": "PIN",
+        "topleft": {
+            "x": 405,
+            "y": 279
+        },
+        "bottomright": {
+            "x": 535,
+            "y": 315
+        },
+        "pins": [
+            {
+                "x": 408,
+                "y": 289
+            }
+        ]
+    },
+    {
+        "component": "PIN",
+        "topleft": {
+            "x": 816,
+            "y": 286
+        },
+        "bottomright": {
+            "x": 921,
+            "y": 313
+        },
+        "pins": [
+            {
+                "x": 819,
+                "y": 293
+            }
+        ]
+    },
+    {
+        "component": "PIN",
+        "topleft": {
+            "x": 660,
+            "y": 306
+        },
+        "bottomright": {
+            "x": 777,
+            "y": 349
+        },
+        "pins": [
+            {
+                "x": 768,
+                "y": 327
+            }
+        ]
+    },
+    {
+        "component": "PIN",
+        "topleft": {
+            "x": 388,
+            "y": 178
+        },
+        "bottomright": {
+            "x": 523,
+            "y": 211
+        },
+        "pins": [
+            {
+                "x": 392,
+                "y": 186
+            }
+        ]
+    },
+    {
+        "component": "PIN",
+        "topleft": {
+            "x": 808,
+            "y": 104
+        },
+        "bottomright": {
+            "x": 909,
+            "y": 128
+        },
+        "pins": [
+            {
+                "x": 811,
+                "y": 116
+            }
+        ]
+    },
+    {
+        "component": "GND",
+        "topleft": {
+            "x": 155,
+            "y": 269
+        },
+        "bottomright": {
+            "x": 210,
+            "y": 374
+        },
+        "pins": [
+            {
+                "x": 182,
+                "y": 272
+            }
+        ]
+    },
+    {
+        "component": "C",
+        "topleft": {
+            "x": 69,
+            "y": 67
+        },
+        "bottomright": {
+            "x": 198,
+            "y": 128
+        },
+        "pins": [
+            {
+                "x": 188,
+                "y": 81
+            },
+            {
+                "x": 72,
+                "y": 97
+            }
+        ]
+    },
+    {
+        "component": "R",
+        "topleft": {
+            "x": 216,
+            "y": 32
+        },
+        "bottomright": {
+            "x": 371,
+            "y": 87
+        },
+        "pins": [
+            {
+                "x": 220,
+                "y": 50
+            },
+            {
+                "x": 359,
+                "y": 55
+            }
+        ]
+    },
+    {
+        "component": "OPV",
+        "topleft": {
+            "x": 197,
+            "y": 102
+        },
+        "bottomright": {
+            "x": 380,
+            "y": 226
+        },
+        "pins": [
+            {
+                "x": 202,
+                "y": 135
+            },
+            {
+                "x": 366,
+                "y": 187
+            },
+            {
+                "x": 202,
+                "y": 193
+            }
+        ]
+    }
+]
