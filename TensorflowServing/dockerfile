@@ -1,0 +1,6 @@
+FROM tensorflow/serving:latest-gpu
+
+RUN mkdir ./models/saved_model
+COPY /mnt/hdd2/Sketch2Circuit/DataProcessing/CompleteModel/Exported/1/ ./models/saved_model/
+
+CMD ["/usr/bin/tf_serving_entrypoint.sh"]
