@@ -27,11 +27,12 @@ def NetListExP(neuralOut):
     NetList = []
     
     for comp in neuralOut:
+        #gets topleft/bottomright cordinates
         topleft = [comp["topleft"]["x"], comp["topleft"]["y"]]
         botright = [comp["bottomright"]["x"], comp["bottomright"]["y"]]
 
         pins = []
-
+        #iterates through the pins since thier amount is variable
         for pincoll in comp["pins"]:
             pins.append(
                 {
@@ -39,7 +40,7 @@ def NetListExP(neuralOut):
                     "y":  pincoll["y"],
                     "id": 0
                 })
-
+        #fill in the rest of the informations
         NetList.append({
             "component": comp["component"],
             "position": { 
@@ -47,9 +48,10 @@ def NetListExP(neuralOut):
                 "y": topleft[1] + (abs(topleft[1] - botright[1]) / 2)},
             "pins": pins
             })
-    out_file = open("NetList.json", "w")
-    json.dump(NetList, out_file)
-    out_file.close()
+    #out_file = open("NetList.json", "w")
+    #json.dump(NetList, out_file, indent=3)
+    #out_file.close()
+    return NetList
 
 def detect(img, neuralOut):
     cdstP = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
@@ -72,18 +74,18 @@ def detect(img, neuralOut):
     cv.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
     
     cv.waitKey()
-    return 0
 
 def main():
     print("-----")
 
-    with open("testdata.json") as jsonFile:
+    with open("NetList.json") as jsonFile:
         jsonObject = json.load(jsonFile)
         jsonFile.close()
+    
 
     img = cv.imread(cv.samples.findFile("test3.jpg"), cv.IMREAD_GRAYSCALE)
     #detect(img, jsonObject)
-    NetListExP(jsonObject)
+    #NetListExP(jsonObject)
 
 if __name__ == "__main__":
     main()
