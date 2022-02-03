@@ -20,7 +20,7 @@ def normalizeAvgLineThickness(img, goal_thickness=4):
     med_thick = np.median(dist[maxima]) * 2.0
     sf = goal_thickness / med_thick
     resized = cv2.resize(img, None, fx=sf, fy=sf, interpolation=cv2.INTER_AREA)
-    return cv2.threshold(cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY), 0, 255, cv2.THRESH_OTSU)[1]
+    return cv2.threshold(resized, 0, 255, cv2.THRESH_OTSU)[1]
 
 def parseNeuralOutput(neuralOutput):
     outputs = neuralOutput.json()['outputs']

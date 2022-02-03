@@ -8,3 +8,4 @@ def create_app():
     app = falcon.asgi.App()
     app.add_route('/', neural)
     return app
+    
