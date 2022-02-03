@@ -18,6 +18,10 @@ def getScale(netlist, linelist):
     xMax = 0
     yMax = 0
     for i in range(0,len(netlist)):
+        if(yMax < netlist[i]["position"]["y"]):
+            yMax = netlist[i]["position"]["y"]
+        if(xMax < netlist[i]["position"]["x"]):
+            xMax = netlist[i]["position"]["x"]
         for x in range(0, len(netlist[i]["pins"])):
             if(yMax < netlist[i]["pins"][x]["y"]):
                 yMax = netlist[i]["pins"][x]["y"]

@@ -1,4 +1,3 @@
-from asyncio.windows_events import NULL
 import sys
 import math
 import cv2 as cv
@@ -21,7 +20,7 @@ def detectNet(lines, neuralOut):
 
     if (satisfied == len(lines)):
         #export the nets to json
-        return NULL
+        return None
     
 def NetListExP(neuralOut):
     NetList = []
