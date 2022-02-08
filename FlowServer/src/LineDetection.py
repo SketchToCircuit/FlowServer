@@ -1,8 +1,11 @@
+from base64 import b64decode
 import sys
 import math
 import cv2 as cv
 import numpy as np
 import json
+from jsonc_parser.parser import JsoncParser
+
 #Workflow detect net
 #start at begining of the components
 #go to first endpoint compare endpoint to nearest point and make the conection
@@ -47,10 +50,8 @@ def NetListExP(neuralOut):
                 "y": topleft[1] + (abs(topleft[1] - botright[1]) / 2)},
             "pins": pins
             })
-    #out_file = open("NetList.json", "w")
-    #json.dump(NetList, out_file, indent=3)
-    #out_file.close()
-    return NetList
+
+    return reorderPins(NetList)
 
 def detect(img, neuralOut):
     cdstP = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
@@ -74,16 +75,59 @@ def detect(img, neuralOut):
     
     cv.waitKey()
 
+def reorderPins(netList):
+    resultNetList = []
+
+    for cmp in netList:
+        if cmp['component'] in ['OPV', 'S3', 'NPN', 'PNP', 'MFET_N_D', 'MFET_N_E', 'MFET_P_D', 'MFET_P_E', 'JFET_N', 'JFET_P']:
+            pins = cmp['pins']
+            center = np.array([cmp['position']['x'], cmp['position']['y']]) * 0.5 + (np.array([pins[0]['x'], pins[0]['y']]) + np.array([pins[1]['x'], pins[1]['y']]) + np.array([pins[2]['x'], pins[2]['y']])) / 3.0 * 0.5
+
+            minError = float('inf')
+            finalPins = pins
+
+            for i in range(3):
+                single = np.array([pins[i]['x'], pins[i]['y']]) - center
+                a = np.array([pins[(i + 1) % 3]['x'], pins[(i + 1) % 3]['y']]) - center
+                b = np.array([pins[(i + 2) % 3]['x'], pins[(i + 2) % 3]['y']]) - center
+
+                singleAngle = math.atan2(single[1], single[0])
+                
+                angleA = math.atan(math.tan(math.atan2(a[1], a[0]) - singleAngle))
+                angleB = math.atan(math.tan(math.atan2(b[1], b[0]) - singleAngle))
+
+                otherAngleError = abs(angleA + angleB)
+                error = abs(math.sin(2.0 * singleAngle)) * math.pi / 4.0 + otherAngleError
+
+                if error < minError:
+                    minError = error
+
+                    if cmp['component'] == 'OPV':
+                        finalPins = [pins[(i + 1) % 3], pins[(i + 2) % 3], pins[i]]
+                    else:
+                        finalPins = [pins[i], pins[(i + 1) % 3], pins[(i + 2) % 3]]
+
+            cmp['pins'] = finalPins
+            resultNetList.append(cmp)
+        else:
+            resultNetList.append(cmp)
+    
+    return resultNetList
+
 def main():
-    print("-----")
+    neuralOutput = JsoncParser.parse_file('TestData/SampleNeuralOutput.jsonc')
 
-    with open("NetList.json") as jsonFile:
-        jsonObject = json.load(jsonFile)
-        jsonFile.close()
-
-    img = cv.imread(cv.samples.findFile("test3.jpg"), cv.IMREAD_GRAYSCALE)
+    img = cv.imread("TestData/test.jpg", cv.IMREAD_GRAYSCALE)
     #detect(img, jsonObject)
-    #NetListExP(jsonObject)
+    
+    netList = NetListExP(neuralOutput)
+
+    netList = reorderPins(netList)
+
+    opv = [cmp for cmp in netList if cmp['component'] == 'OPV']
+    npn = [cmp for cmp in netList if cmp['component'] == 'NPN']
+    print(opv)
+    print(npn)
 
 if __name__ == "__main__":
     main()
