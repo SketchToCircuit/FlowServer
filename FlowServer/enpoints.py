@@ -51,22 +51,22 @@ class Neural:
         except:
             resp.staus = 400
             return
-        # if(imageBase64 == "" or len(outputMethodes)<1):
-        #     resp.status = 400
-        #     return
-        # #Send picture data to TensorflowServing for evaluation
-        # image = utils.normalizeAvgLineThickness(utils.decodeBase64(imageBase64), goal_thickness=4)
-        # nnreq = '{"inputs":{"image":"'+str(base64.urlsafe_b64encode(cv2.imencode('.jpg', image)[1])).replace("b'", "").replace("'","")+'"}}'
-        # try:
-        #     neuralOutput = requests.post('http://localhost:8501/v1/models/CompleteModel/versions/1:predict', data=nnreq)
-        # except:
-        #     loging.Warn("Serving server down")
-        #     resp.status = 500
-        #     return
-        # #Use linedetection to generate netlist and linelist
-        # #netList, lineList = LineDetection.detect(utils.parseNeuralOutput(neuralOutput), image)#
-
-        netList = json.loads(Testnetlist)
+        if(imageBase64 == "" or len(outputMethodes)<1):
+            resp.status = 400
+            return
+        # Send picture data to TensorflowServing for evaluation
+        image = utils.normalizeAvgLineThickness(utils.decodeBase64(imageBase64), goal_thickness=4)
+        nnreq = '{"inputs":{"image":"'+str(base64.urlsafe_b64encode(cv2.imencode('.jpg', image)[1])).replace("b'", "").replace("'","")+'"}}'
+        try:
+            neuralOutput = requests.post('http://localhost:8501/v1/models/CompleteModel/versions/1:predict', data=nnreq)
+        except:
+            loging.Warn("Serving server down")
+            resp.status = 500
+            return
+        # Use linedetection to generate netlist and linelist
+        # netList, lineList = LineDetection.detect(utils.parseNeuralOutput(neuralOutput), image)
+        print(neuralOutput.json())
+        netList = LineDetection.NetListExP(utils.parseNeuralOutput(neuralOutput))
         lineList = json.loads(Testlinelist)
         output = {
         }

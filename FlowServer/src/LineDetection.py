@@ -80,7 +80,6 @@ def main():
     with open("NetList.json") as jsonFile:
         jsonObject = json.load(jsonFile)
         jsonFile.close()
-    
 
     img = cv.imread(cv.samples.findFile("test3.jpg"), cv.IMREAD_GRAYSCALE)
     #detect(img, jsonObject)
