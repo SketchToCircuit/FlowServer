@@ -1,0 +1,126 @@
+// array of nets
+[
+  // net #0
+  {
+    // array of points in net
+    "points": [
+      {
+        // position of point
+        "pos": {
+          "x": 55,
+          "y": 252
+        },
+        // indices of connected points
+        "connected": [
+          1
+        ]
+      },
+      {
+        "pos": {
+          "x": 250,
+          "y": 250
+        },
+        "connected": [
+          2
+        ]
+      },
+      {
+        "pos": {
+          "x": 255,
+          "y": 190
+        },
+        "connected": [
+        ]
+      }
+    ]
+  },
+  // net #1
+  {
+    "points": [
+      {
+        "pos": {
+          "x": 25,
+          "y": 110
+        },
+        "connected": [
+          1
+        ]
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 40
+        },
+        "connected": [
+          2
+        ]
+      },
+      {
+        "pos": {
+          "x": 255,
+          "y": 40
+        },
+        "connected": [
+          3
+        ]
+      },
+      {
+        "pos": {
+          "x": 255,
+          "y": 100
+        },
+        "connected": [
+        ]
+      }
+    ]
+  },
+  // net #2
+  {
+    "points": [
+      {
+        "pos": {
+          "x": 145,
+          "y": 145
+        },
+        "connected": [
+          1,
+          2
+        ]
+      },
+      {
+        "pos": {
+          "x": 205,
+          "y": 145
+        },
+        "connected": [
+        ]
+      },
+      {
+        "pos": {
+          "x": 135,
+          "y": 190
+        },
+        "connected": [
+          3
+        ]
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 190
+        },
+        "connected": [
+          4
+        ]
+      },
+      {
+        "pos": {
+          "x": 25,
+          "y": 145
+        },
+        "connected": [
+        ]
+      }
+    ]
+  }
+]
