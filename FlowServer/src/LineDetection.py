@@ -1,98 +1,78 @@
 from base64 import b64decode
-from pickle import FALSE, TRUE
+from re import X
 import sys
 import math
+from tkinter import Y
+from typing import List
 import cv2 as cv
 import numpy as np
 import json
 from jsonc_parser.parser import JsoncParser
+import numpy as np
+class Linepoint:
+    X = 0
+    Y = 0
+class Line:
+    point1 = Linepoint 
+    point2 = Linepoint
 
-def detectNet(lines, neuralOut):
-    #lines left defines how many lines(pointsare left)
-    HITRADIUS = 40 #px
-    linesLeft = lines
-    nets = []
-
-    #create a list of all component pins
-    pinPoints = []
+def getCompPins(neuralOut):
+    compPins = []
     for pins in neuralOut["pins"]:
-        for pin in pins:
-            pinPoints.append((pin["x"], pin["y"]))
+        compPins.append((
+            pins["x"],
+            pins["y"]
+        ))
+    return compPins
 
-    #creates a list double in length but identical in order to lines but as individual points (x, y)
-    linePoints = []
+
+def findNearestLine(lines , point : Linepoint):
+    line : Line
+    HITRADIUS = 40#px
     for line in lines:
-        linePoints.append((line[0], line[1]))
-        linePoints.append((line[2], line[3]))
-
-    currPoint = linePoints[1]
-    unsatisfied = []
-    unsatisfied.append(0)
-
-    while linesLeft:
-        net = []
-        #if the direction of a line diverts by a certein threshhold of the line befor it gets counted as imtersection and is counted as Unsatisfied
-        netIsFinished = FALSE
-        currPoint = linesLeft[1]
-        unsatisfied = []
-        conected = []
-
-        while not netIsFinished:
+        distance1 = int(math.sqrt((point.X + line.point1.X)**2 + (point.Y + line.point1.Y)**2))
+        distance2 = int(math.sqrt((point.X + line.point2.X)**2 + (point.Y + line.point2.Y)**2))
+        if(distance1 < HITRADIUS and distance2 < HITRADIUS):
             
-            #check for component pins if they touch and if they do thier id will be the iterator of thier list + length of linePoints
-            for i in range(len(pinPoints)):
-                distance = math.sqrt((currPoint(2) -pinPoints[i][0])**2 + (currPoint(3) -pinPoints[i][0])**2)
-                if distance <= HITRADIUS:
-                    conected.append(i + len(pinPoints))
-
-            #check which lines "touch" each other           
-            for i in range(len(linePoints)):
-                distance = math.sqrt((currPoint(2) -linePoints[i][0])**2 + (currPoint(3) -linePoints[i][0])**2)
-                if distance <= HITRADIUS:
-                    conected.append(i)
-
-            #if there is no point around
-            if len(conected) == 0:
-                if len(unsatisfied) == 0:
-                    netIsFinished = TRUE
-                    #break
-
-                net.append(
-                    (currPoint),
-                    []
-                )
-            else:   
-                #fill in the detected point into the net
-                net.append(
-                    (currPoint),
-                    conected
-                )
-                       
-
-            #ToDo if the line hits only the component it will fail
-            #set the firstly detected points endpoint as new current Point
-            if conected[0] > len(pinPoints):
-                #if first conected was a pinPoint set an unsatisfied
-                 if conected[0] % 2 == 0:
-                    currPoint = unsatisfied[0] + 1
-                    del unsatisfied[0]
-                 else:
-                    currPoint = unsatisfied[0] - 1
-                    del unsatisfied[0] 
-            elif conected[0] % 2 == 0:
-                currPoint = conected[0] + 1
-            else:
-                currPoint = conected[0] - 1
-            #add all conections which arent traced yet to the unsatisfied conections
-            unsatisfied.extend(conected[1:])
-
-        #put he dcetected net into the nets      
-        nets.append(net)
-
-    return 0
-
 
     
+
+def checkForPin(startPoint, compPins):
+    HITRADIUS = 40#px
+    for pins in compPins:
+        distance = math.sqrt((startPoint[0] - pins[0])**2 + (startPoint[1] - pins[1])**2)
+        if distance < HITRADIUS:
+           return True
+
+
+def followLine(netlines, lines, startPoint, net : List, compPins):
+    nearestline, shortlines = findNearestLine(lines, startPoint)
+
+    if not nearestline:
+        return net
+
+    if checkForPin(startPoint, compPins):
+        net.append(
+            startPoint,
+            nearestline
+        )
+
+    for foundline in nearestline:
+        if foundline[1] == 2:
+            startPoint = (
+                lines[2],
+                lines[3]
+            )
+        elif foundline[1] == 1:
+            startPoint = (
+                lines[0],
+                lines[1]
+            )
+        findNet(netlines, lines, startPoint, net, compPins)
+
+
+
+    return 0
     
 def NetListExP(neuralOut):
     NetList = []
@@ -162,7 +142,7 @@ def detect(img, neuralOut):
             int(newBotright[0] * 0.95),
             int(newBotright[1] * 0.95)
         )
-
+        
         cv.rectangle(img, newTopleft, newBotright, (0,0,0), -1)
         cv.rectangle(cdstP, newTopleft, newBotright, (0,0,255), 2)
 
@@ -172,8 +152,10 @@ def detect(img, neuralOut):
 
     #predicting lines 
     linesP = cv.HoughLinesP(img, 1, np.pi / 180, 25, 5, 5)
-
-
+    newLines = []
+    for lines in linesP:
+        bufferline = Line(Linepoint(lines[0], lines[1]), Linepoint(lines[2], lines[3]))
+        newLines.append(bufferline)
 
     #draw predicted lines just for debuging
     if linesP is not None:
