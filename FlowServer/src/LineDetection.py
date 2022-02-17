@@ -1,14 +1,13 @@
 from base64 import b64decode
-from re import X
 import sys
 import math
-from tkinter import Y
 from typing import List
 import cv2 as cv
 import numpy as np
+from scipy import signal
 import json
 from jsonc_parser.parser import JsoncParser
-import numpy as np
+
 class Linepoint:
     X = 0
     Y = 0
@@ -18,13 +17,49 @@ class Line:
 
 def getCompPins(neuralOut):
     compPins = []
+
+# check if junction is connected (with black dot) or is just a crossing of two lines
+# position = (x, y) in px
+# img is a grayscale opencv image with black background
+def isConnectedKnot(position, img):
+    PATCH_HALF_SIZE = 15
+    patch = img[position[1]-PATCH_HALF_SIZE:position[1]+PATCH_HALF_SIZE, position[0]-PATCH_HALF_SIZE:position[0]+PATCH_HALF_SIZE]
+    patch = cv.copyMakeBorder(patch, 3, 3, 3, 3, cv.BORDER_CONSTANT, value=0)
+    _, patch = cv.threshold(patch, 127, 255, cv.THRESH_BINARY)
+
+    dist = cv.distanceTransform(patch, cv.DIST_L2, cv.DIST_MASK_3)
+
+    maxima = signal.argrelextrema(dist, np.greater, order=4)
+    
+    if maxima[0].size == 0:
+        return False
+
+    center = PATCH_HALF_SIZE + 3
+
+    dist_to_center = np.square(maxima[0] - center) + np.square(maxima[1] - center)
+    x = maxima[1][np.argmin(dist_to_center)]
+    y = maxima[0][np.argmin(dist_to_center)]
+    # print(dist[y, x])
+    # dist_norm = (dist / np.amax(dist) * 255).astype(np.uint8)
+    # cv.imshow('d', dist_norm)
+    # cv.waitKey(0)
+
+    return dist[y, x] > 2.6
+
+def detectNet(lines, neuralOut):
+    #lines left defines how many lines(pointsare left)
+    HITRADIUS = 40 #px
+    linesLeft = lines
+    nets = []
+
+    #create a list of all component pins
+    pinPoints = []
     for pins in neuralOut["pins"]:
         compPins.append((
             pins["x"],
             pins["y"]
         ))
     return compPins
-
 
 def findNearestLine(lines , point : Linepoint):
     line : Line
@@ -33,9 +68,6 @@ def findNearestLine(lines , point : Linepoint):
         distance1 = int(math.sqrt((point.X + line.point1.X)**2 + (point.Y + line.point1.Y)**2))
         distance2 = int(math.sqrt((point.X + line.point2.X)**2 + (point.Y + line.point2.Y)**2))
         if(distance1 < HITRADIUS and distance2 < HITRADIUS):
-            
-
-    
 
 def checkForPin(startPoint, compPins):
     HITRADIUS = 40#px
@@ -43,7 +75,6 @@ def checkForPin(startPoint, compPins):
         distance = math.sqrt((startPoint[0] - pins[0])**2 + (startPoint[1] - pins[1])**2)
         if distance < HITRADIUS:
            return True
-
 
 def followLine(netlines, lines, startPoint, net : List, compPins):
     nearestline, shortlines = findNearestLine(lines, startPoint)
@@ -70,9 +101,7 @@ def followLine(netlines, lines, startPoint, net : List, compPins):
             )
         findNet(netlines, lines, startPoint, net, compPins)
 
-
-
-    return 0
+    return 0  
     
 def NetListExP(neuralOut):
     NetList = []
@@ -106,8 +135,7 @@ def NetListExP(neuralOut):
 def detect(img, neuralOut):
     cdstP = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
     _, img = cv.threshold(img,128, 255, cv.THRESH_BINARY_INV)
-
-    
+   
     _, img = cv.threshold(img,128, 255, cv.THRESH_BINARY)
     rows = img.shape[0]
 
