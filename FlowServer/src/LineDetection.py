@@ -1,15 +1,42 @@
 from base64 import b64decode
-from re import X
 import sys
 import math
-from tkinter import Y
 from typing import List
 from webbrowser import get
 import cv2 as cv
 import numpy as np
+from scipy import signal
 import json
 from jsonc_parser.parser import JsoncParser
-import numpy as np
+
+# check if junction is connected (with black dot) or is just a crossing of two lines
+# position = (x, y) in px
+# img is a grayscale opencv image with black background
+def isConnectedKnot(position, img):
+    PATCH_HALF_SIZE = 15
+    patch = img[position[1]-PATCH_HALF_SIZE:position[1]+PATCH_HALF_SIZE, position[0]-PATCH_HALF_SIZE:position[0]+PATCH_HALF_SIZE]
+    patch = cv.copyMakeBorder(patch, 3, 3, 3, 3, cv.BORDER_CONSTANT, value=0)
+    _, patch = cv.threshold(patch, 127, 255, cv.THRESH_BINARY)
+
+    dist = cv.distanceTransform(patch, cv.DIST_L2, cv.DIST_MASK_3)
+
+    maxima = signal.argrelextrema(dist, np.greater, order=4)
+    
+    if maxima[0].size == 0:
+        return False
+
+    center = PATCH_HALF_SIZE + 3
+
+    dist_to_center = np.square(maxima[0] - center) + np.square(maxima[1] - center)
+    x = maxima[1][np.argmin(dist_to_center)]
+    y = maxima[0][np.argmin(dist_to_center)]
+    # print(dist[y, x])
+    # dist_norm = (dist / np.amax(dist) * 255).astype(np.uint8)
+    # cv.imshow('d', dist_norm)
+    # cv.waitKey(0)
+
+    return dist[y, x] > 2.6
+
 class Linepoint:
     def __init__(self, x, y):
         self.X = x
