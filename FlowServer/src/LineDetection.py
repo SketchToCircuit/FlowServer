@@ -4,39 +4,62 @@ import sys
 import math
 from tkinter import Y
 from typing import List
+from webbrowser import get
 import cv2 as cv
 import numpy as np
 import json
 from jsonc_parser.parser import JsoncParser
 import numpy as np
 class Linepoint:
-    X = 0
-    Y = 0
+    def __init__(self, x, y):
+        self.X = x
+        self.Y = y
 class Line:
-    point1 = Linepoint 
-    point2 = Linepoint
+    def __init__(self, p1 : Linepoint, p2 : Linepoint):
+        self.p1 = p1
+        self.p2 = p2
 
 def getCompPins(neuralOut):
     compPins = []
-    for pins in neuralOut["pins"]:
-        compPins.append((
-            pins["x"],
-            pins["y"]
-        ))
+    for component in neuralOut:
+        for pin in component["pins"]:
+            compPins.append((
+                pin["x"],
+                pin["y"]
+            ))
     return compPins
 
+def getAngle(l1, l2 ):
+    len1 = math.sqrt((l1[0] - l1[2])**2 + (l1[1] - l1[3])**2)
+    len2 = math.sqrt((l2[0] - l2[2])**2 + (l2[1] - l2[3])**2)
 
-def findNearestLine(lines , point : Linepoint):
-    line : Line
-    HITRADIUS = 40#px
-    for line in lines:
-        distance1 = int(math.sqrt((point.X + line.point1.X)**2 + (point.Y + line.point1.Y)**2))
-        distance2 = int(math.sqrt((point.X + line.point2.X)**2 + (point.Y + line.point2.Y)**2))
+    v1 = np.array((
+        l1[0] - l1[2],
+        l1[1] - l1[3]
+    ))
+
+    v2 = np.array((
+        l2[0] - l2[2],
+        l2[1] - l2[3]
+    ))
+    return math.acos((v1 @ v2) / (len1 * len2))
+
+def findNearestLine(lines, point):
+    nearestlines = []
+    HITRADIUS = 100#px
+    shortlines = []
+    for i,line in enumerate(lines):
+        distance1 = int(math.sqrt((point[0] - line[0])**2 + (point[1] - line[1])**2))
+        distance2 = int(math.sqrt((point[0] - line[2])**2 + (point[1] - line[3])**2))
         if(distance1 < HITRADIUS and distance2 < HITRADIUS):
-            
+            shortlines.append(i)
+        elif(distance1 < HITRADIUS):
+            nearestlines.append((i, 1))
+        elif(distance2 < HITRADIUS):
+            nearestlines.append((i, 2))
 
+    return nearestlines, shortlines
     
-
 def checkForPin(startPoint, compPins):
     HITRADIUS = 40#px
     for pins in compPins:
@@ -45,34 +68,37 @@ def checkForPin(startPoint, compPins):
            return True
 
 
-def followLine(netlines, lines, startPoint, net : List, compPins):
-    nearestline, shortlines = findNearestLine(lines, startPoint)
-
+def followLine(lines , currPoint, compPins, turtleList, img):
+    cv.circle(img, currPoint, 50, (0, 255, 0), 2)
+    nearestline, shortlines = findNearestLine(lines, currPoint)
+    currLine = [turtleList[-1][0], turtleList[-1][1], currPoint[0], currPoint[1]]
+    
     if not nearestline:
-        return net
+        print("nothing found")
+        return turtleList
+    #check the angle for the lines
+    for line in nearestline:
+        angle = getAngle(currLine, lines[line[0]])
+        #20deg deviaion is counted as straight
+        if angle < math.pi - (math.pi/8):
+            print("found Straight")
+            print(lines[line[0]])
+            if line[1] == 1:
+                currPoint = (
+                    lines[line[0]][0],
+                    lines[line[0]][1]
+                )
+                cv.line(img, (lines[line[0]][0], lines[line[0]][1]), (lines[line[0]][2], lines[line[0]][3]), (0,255,0), 7, cv.LINE_AA)
+            elif line[1] == 2:
+                currPoint = (
+                    lines[line[0]][2],
+                    lines[line[0]][3]
+                )
+        elif angle > 1.4 and angle < 1.7:
+            pass
 
-    if checkForPin(startPoint, compPins):
-        net.append(
-            startPoint,
-            nearestline
-        )
-
-    for foundline in nearestline:
-        if foundline[1] == 2:
-            startPoint = (
-                lines[2],
-                lines[3]
-            )
-        elif foundline[1] == 1:
-            startPoint = (
-                lines[0],
-                lines[1]
-            )
-        findNet(netlines, lines, startPoint, net, compPins)
-
-
-
-    return 0
+    if checkForPin(currPoint, compPins):
+        pass
     
 def NetListExP(neuralOut):
     NetList = []
@@ -105,64 +131,32 @@ def NetListExP(neuralOut):
 
 def detect(img, neuralOut):
     cdstP = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
-    _, img = cv.threshold(img,128, 255, cv.THRESH_BINARY_INV)
+    _, img = cv.threshold(img, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)
 
-    
-    _, img = cv.threshold(img,128, 255, cv.THRESH_BINARY)
-    rows = img.shape[0]
-
-    #for now lines will be preped by whiteboxing all components
-    for component in neuralOut:
-        #set the width of the boundingbox to the points
-        newTopleft = (
-            component["topleft"]["x"],
-            component["topleft"]["y"]         
-        )
-        newBotright = (
-            component["bottomright"]["x"],
-            component["bottomright"]["y"]
-        )
-        
-        for pins in component["pins"]:
-            newTopleft = (
-                min(newTopleft[0], pins["x"]),
-                component["topleft"]["y"]
-            )
-            newBotright = (
-                max(newBotright[0], pins["x"]),
-                component["bottomright"]["y"]
-            )
-        #reduce the height of the bounding box by 10%
-        newTopleft = (
-            int(newTopleft[0] * 1.05),
-            int(newTopleft[1] * 1.05)
-        )
-
-        newBotright = (
-            int(newBotright[0] * 0.95),
-            int(newBotright[1] * 0.95)
-        )
-        
-        cv.rectangle(img, newTopleft, newBotright, (0,0,0), -1)
-        cv.rectangle(cdstP, newTopleft, newBotright, (0,0,255), 2)
-
-    #cleaning away little lines after croping components
-    kernel = np.ones((5,5),np.uint8)
-    img = cv.morphologyEx(img, cv.MORPH_CLOSE, kernel)   
+    #skeletonize the picture
+    img = cv.ximgproc.thinning(img)
+    #cv.imshow("", thin) 
 
     #predicting lines 
-    linesP = cv.HoughLinesP(img, 1, np.pi / 180, 25, 5, 5)
-    newLines = []
-    for lines in linesP:
-        bufferline = Line(Linepoint(lines[0], lines[1]), Linepoint(lines[2], lines[3]))
-        newLines.append(bufferline)
+    linesP = cv.HoughLinesP(img, 1, np.pi / 180, 13, None, 0, 15)
 
+    lines = []
+    for line in linesP:
+        lines.append(line[0])
+
+    turtleList = [(227,327)]
+    compPins = getCompPins(neuralOut)
+    followLine(lines, (257, 324), compPins, turtleList, cdstP)
+        
     #draw predicted lines just for debuging
     if linesP is not None:
         for i in range(0, len(linesP)):
             l = linesP[i][0]
             cv.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 2, cv.LINE_AA)
-    print(len(linesP))
+            cv.circle(cdstP, (l[0], l[1]), 2, (255, 0, 0), -1)
+            cv.circle(cdstP, (l[2], l[3]), 2, (255, 0, 0), -1)
+    
+    
     
     cv.imshow("closed Source", img)
     cv.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
