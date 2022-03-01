@@ -37,15 +37,6 @@ def isConnectedKnot(position, img):
 
     return dist[y, x] > 2.6
 
-class Linepoint:
-    def __init__(self, x, y):
-        self.X = x
-        self.Y = y
-class Line:
-    def __init__(self, p1 : Linepoint, p2 : Linepoint):
-        self.p1 = p1
-        self.p2 = p2
-
 def getCompPins(neuralOut):
     compPins = []
     for component in neuralOut:
@@ -71,9 +62,24 @@ def getAngle(l1, l2 ):
     ))
     return math.acos((v1 @ v2) / (len1 * len2))
 
+def returnCurrPoint(line):
+    if line[1] == 1:
+        currPoint = (
+            line[0][0],
+            line[0][1]
+            )
+    elif line[1] == 2:
+        currPoint = (
+            line[0][2],
+            line[0][3]
+            )
+
+    return currPoint
+
+
 def findNearestLine(lines, point):
     nearestlines = []
-    HITRADIUS = 100#px
+    HITRADIUS = 40#px
     shortlines = []
     for i,line in enumerate(lines):
         distance1 = int(math.sqrt((point[0] - line[0])**2 + (point[1] - line[1])**2))
@@ -81,51 +87,67 @@ def findNearestLine(lines, point):
         if(distance1 < HITRADIUS and distance2 < HITRADIUS):
             shortlines.append(i)
         elif(distance1 < HITRADIUS):
-            nearestlines.append((i, 1))
+            nearestlines.append((line, 1))
         elif(distance2 < HITRADIUS):
-            nearestlines.append((i, 2))
+            nearestlines.append((line, 2))
 
     return nearestlines, shortlines
     
 def checkForPin(startPoint, compPins):
     HITRADIUS = 40#px
-    for pins in compPins:
-        distance = math.sqrt((startPoint[0] - pins[0])**2 + (startPoint[1] - pins[1])**2)
+    for pin in compPins:
+        distance = math.sqrt((startPoint[0] - pin[0])**2 + (startPoint[1] - pin[1])**2)
         if distance < HITRADIUS:
-           return True
+           return True, pin
+    
+    return False, ()
 
+def followLine(lines : List, currPoint, compPins, turtleList : List, img):
+    foundPin, compPin = checkForPin(currPoint, compPins)
+    if foundPin:
+        turtleList.append(compPin)
+        return None
 
-def followLine(lines , currPoint, compPins, turtleList, img):
-    cv.circle(img, currPoint, 50, (0, 255, 0), 2)
+    cv.circle(img, currPoint, 10, (0, 255, 0), -1)
     nearestline, shortlines = findNearestLine(lines, currPoint)
     currLine = [turtleList[-1][0], turtleList[-1][1], currPoint[0], currPoint[1]]
+    allsubturtles:List
     
     if not nearestline:
         print("nothing found")
+        cv.circle(img, currPoint, 40, (255, 0, 0), 2)
         return turtleList
-    #check the angle for the lines
+    line : List
     for line in nearestline:
-        angle = getAngle(currLine, lines[line[0]])
-        #20deg deviaion is counted as straight
-        if angle < math.pi - (math.pi/8):
-            print("found Straight")
-            print(lines[line[0]])
-            if line[1] == 1:
-                currPoint = (
-                    lines[line[0]][0],
-                    lines[line[0]][1]
-                )
-                cv.line(img, (lines[line[0]][0], lines[line[0]][1]), (lines[line[0]][2], lines[line[0]][3]), (0,255,0), 7, cv.LINE_AA)
-            elif line[1] == 2:
-                currPoint = (
-                    lines[line[0]][2],
-                    lines[line[0]][3]
-                )
-        elif angle > 1.4 and angle < 1.7:
-            pass
+        #calculate angle of the lines in rad
+        angle = getAngle(currLine, line[0])
 
-    if checkForPin(currPoint, compPins):
-        pass
+        #20deg deviation is counted as straight
+        if angle < math.pi - (math.pi/8):
+            #get the next point from a line
+            currPoint = returnCurrPoint(line)
+            cv.line(img, (line[0][0], line[0][1]), (line[0][2], line[0][3]), (0,255,255), 5, cv.LINE_AA)
+            #remove per value in the line List
+            lines = [l for l in lines if l is not line[0]]
+
+            followLine(lines , currPoint, compPins, turtleList, img)
+        elif angle > 1.4 and angle < 1.7:#~80 to ~100deg
+            #create a sub turtle list with the current point as first turtle point 
+            subturtleList = []
+            subturtleList.append(currPoint)
+            #add the last valid turtle point to the main turtle list
+            turtleList.append(currPoint)
+
+            #get the next point from a line
+            currPoint = returnCurrPoint(line)
+            cv.line(img, (line[0][0], line[0][1]), (line[0][2], line[0][3]), (0,255,255), 5, cv.LINE_AA)
+            #remove per value in the line List
+            lines = [l for l in lines if l is not line[0]]
+    
+            followLine(lines , currPoint, compPins, subturtleList, img)
+
+            #append all subturtle list to the main list to get an enclosing turtle list
+            turtleList.append(allsubturtles)
     
 def NetListExP(neuralOut):
     NetList = []
@@ -171,9 +193,9 @@ def detect(img, neuralOut):
     for line in linesP:
         lines.append(line[0])
 
-    turtleList = [(227,327)]
+    turtleList = [(137,247)]
     compPins = getCompPins(neuralOut)
-    followLine(lines, (257, 324), compPins, turtleList, cdstP)
+    followLine(lines, (203, 250), compPins, turtleList, cdstP)
         
     #draw predicted lines just for debuging
     if linesP is not None:
