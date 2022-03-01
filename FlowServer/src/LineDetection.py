@@ -110,33 +110,42 @@ def followLine(lines : List, currPoint, compPins, turtleList : List, img):
 
     cv.circle(img, currPoint, 10, (0, 255, 0), -1)
     nearestline, shortlines = findNearestLine(lines, currPoint)
-    currLine = [turtleList[-1][0], turtleList[-1][1], currPoint[0], currPoint[1]]
+    currLine = [turtleList[-2][0], turtleList[-2][1], turtleList[-1][0], turtleList[-1][1]]
     allsubturtles:List
     
     if not nearestline:
-        print("nothing found")
+        print(turtleList)
         cv.circle(img, currPoint, 40, (255, 0, 0), 2)
         return turtleList
+
+      
+
     line : List
     for line in nearestline:
         #calculate angle of the lines in rad
         angle = getAngle(currLine, line[0])
 
         #20deg deviation is counted as straight
-        if angle < math.pi - (math.pi/8):
+        if angle < math.pi - (math.pi/8):    
             #get the next point from a line
             currPoint = returnCurrPoint(line)
+            #write current point to turtel list
+            del turtleList[-1]
+            turtleList.append(currPoint)
+
             cv.line(img, (line[0][0], line[0][1]), (line[0][2], line[0][3]), (0,255,255), 5, cv.LINE_AA)
+
             #remove per value in the line List
             lines = [l for l in lines if l is not line[0]]
 
             followLine(lines , currPoint, compPins, turtleList, img)
         elif angle > 1.4 and angle < 1.7:#~80 to ~100deg
+            #add the last valid turtle point to the main turtle list
+            turtleList.append(currPoint)
+
             #create a sub turtle list with the current point as first turtle point 
             subturtleList = []
             subturtleList.append(currPoint)
-            #add the last valid turtle point to the main turtle list
-            turtleList.append(currPoint)
 
             #get the next point from a line
             currPoint = returnCurrPoint(line)
@@ -193,7 +202,7 @@ def detect(img, neuralOut):
     for line in linesP:
         lines.append(line[0])
 
-    turtleList = [(137,247)]
+    turtleList = [(137,247), (145,247)]
     compPins = getCompPins(neuralOut)
     followLine(lines, (203, 250), compPins, turtleList, cdstP)
         
@@ -205,7 +214,7 @@ def detect(img, neuralOut):
             cv.circle(cdstP, (l[0], l[1]), 2, (255, 0, 0), -1)
             cv.circle(cdstP, (l[2], l[3]), 2, (255, 0, 0), -1)
     
-    
+    cv.line(cdstP, (137, 247), (255, 190), (255,0,255), 2, cv.LINE_AA)
     
     cv.imshow("closed Source", img)
     cv.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
