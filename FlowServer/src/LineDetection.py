@@ -1,225 +1,19 @@
-from base64 import b64decode
-import sys
 import math
+from time import time
 from typing import List
-from webbrowser import get
+import random
 import cv2 as cv
+from cv2 import DESCRIPTOR_MATCHER_BRUTEFORCE
 import numpy as np
 from scipy import signal
-import json
+import scipy
+import scipy.sparse
+from skimage import morphology
+import skan
+import networkx as nx
 from jsonc_parser.parser import JsoncParser
 
-# check if junction is connected (with black dot) or is just a crossing of two lines
-# position = (x, y) in px
-# img is a grayscale opencv image with black background
-def isConnectedKnot(position, img):
-    PATCH_HALF_SIZE = 15
-    patch = img[position[1]-PATCH_HALF_SIZE:position[1]+PATCH_HALF_SIZE, position[0]-PATCH_HALF_SIZE:position[0]+PATCH_HALF_SIZE]
-    patch = cv.copyMakeBorder(patch, 3, 3, 3, 3, cv.BORDER_CONSTANT, value=0)
-    _, patch = cv.threshold(patch, 127, 255, cv.THRESH_BINARY)
-
-    dist = cv.distanceTransform(patch, cv.DIST_L2, cv.DIST_MASK_3)
-
-    maxima = signal.argrelextrema(dist, np.greater, order=4)
-    
-    if maxima[0].size == 0:
-        return False
-
-    center = PATCH_HALF_SIZE + 3
-
-    dist_to_center = np.square(maxima[0] - center) + np.square(maxima[1] - center)
-    x = maxima[1][np.argmin(dist_to_center)]
-    y = maxima[0][np.argmin(dist_to_center)]
-    # print(dist[y, x])
-    # dist_norm = (dist / np.amax(dist) * 255).astype(np.uint8)
-    # cv.imshow('d', dist_norm)
-    # cv.waitKey(0)
-
-    return dist[y, x] > 2.6
-
-def getCompPins(neuralOut):
-    compPins = []
-    for component in neuralOut:
-        for pin in component["pins"]:
-            compPins.append((
-                pin["x"],
-                pin["y"]
-            ))
-    return compPins
-
-def getAngle(l1, l2 ):
-    len1 = math.sqrt((l1[0] - l1[2])**2 + (l1[1] - l1[3])**2)
-    len2 = math.sqrt((l2[0] - l2[2])**2 + (l2[1] - l2[3])**2)
-
-    v1 = np.array((
-        l1[0] - l1[2],
-        l1[1] - l1[3]
-    ))
-
-    v2 = np.array((
-        l2[0] - l2[2],
-        l2[1] - l2[3]
-    ))
-    return math.acos((v1 @ v2) / (len1 * len2))
-
-def returnCurrPoint(line):
-    if line[1] == 1:
-        currPoint = (
-            line[0][0],
-            line[0][1]
-            )
-    elif line[1] == 2:
-        currPoint = (
-            line[0][2],
-            line[0][3]
-            )
-
-    return currPoint
-
-
-def findNearestLine(lines, point):
-    nearestlines = []
-    HITRADIUS = 40#px
-    shortlines = []
-    for i,line in enumerate(lines):
-        distance1 = int(math.sqrt((point[0] - line[0])**2 + (point[1] - line[1])**2))
-        distance2 = int(math.sqrt((point[0] - line[2])**2 + (point[1] - line[3])**2))
-        if(distance1 < HITRADIUS and distance2 < HITRADIUS):
-            shortlines.append(i)
-        elif(distance1 < HITRADIUS):
-            nearestlines.append((line, 1))
-        elif(distance2 < HITRADIUS):
-            nearestlines.append((line, 2))
-
-    return nearestlines, shortlines
-    
-def checkForPin(startPoint, compPins):
-    HITRADIUS = 40#px
-    for pin in compPins:
-        distance = math.sqrt((startPoint[0] - pin[0])**2 + (startPoint[1] - pin[1])**2)
-        if distance < HITRADIUS:
-           return True, pin
-    
-    return False, ()
-
-def followLine(lines : List, currPoint, compPins, turtleList : List, img):
-    foundPin, compPin = checkForPin(currPoint, compPins)
-    if foundPin:
-        turtleList.append(compPin)
-        return None
-
-    cv.circle(img, currPoint, 10, (0, 255, 0), -1)
-    nearestline, shortlines = findNearestLine(lines, currPoint)
-    currLine = [turtleList[-2][0], turtleList[-2][1], turtleList[-1][0], turtleList[-1][1]]
-    allsubturtles:List
-    
-    if not nearestline:
-        print(turtleList)
-        cv.circle(img, currPoint, 40, (255, 0, 0), 2)
-        return turtleList
-
-      
-
-    line : List
-    for line in nearestline:
-        #calculate angle of the lines in rad
-        angle = getAngle(currLine, line[0])
-
-        #20deg deviation is counted as straight
-        if angle < math.pi - (math.pi/8):    
-            #get the next point from a line
-            currPoint = returnCurrPoint(line)
-            #write current point to turtel list
-            del turtleList[-1]
-            turtleList.append(currPoint)
-
-            cv.line(img, (line[0][0], line[0][1]), (line[0][2], line[0][3]), (0,255,255), 5, cv.LINE_AA)
-
-            #remove per value in the line List
-            lines = [l for l in lines if l is not line[0]]
-
-            followLine(lines , currPoint, compPins, turtleList, img)
-        elif angle > 1.4 and angle < 1.7:#~80 to ~100deg
-            #add the last valid turtle point to the main turtle list
-            turtleList.append(currPoint)
-
-            #create a sub turtle list with the current point as first turtle point 
-            subturtleList = []
-            subturtleList.append(currPoint)
-
-            #get the next point from a line
-            currPoint = returnCurrPoint(line)
-            cv.line(img, (line[0][0], line[0][1]), (line[0][2], line[0][3]), (0,255,255), 5, cv.LINE_AA)
-            #remove per value in the line List
-            lines = [l for l in lines if l is not line[0]]
-    
-            followLine(lines , currPoint, compPins, subturtleList, img)
-
-            #append all subturtle list to the main list to get an enclosing turtle list
-            turtleList.append(allsubturtles)
-    
-def NetListExP(neuralOut):
-    NetList = []
-    
-    for comp in neuralOut:
-        #gets topleft/bottomright cordinates
-        topleft = [comp["topleft"]["x"], comp["topleft"]["y"]]
-        botright = [comp["bottomright"]["x"], comp["bottomright"]["y"]]
-
-        pins = []
-        #iterates through the pins since thier amount is variable
-        for pincoll in comp["pins"]:
-            pins.append(
-                {
-                    "x": pincoll["x"], 
-                    "y":  pincoll["y"],
-                    "id": 0
-                })
-        #fill in the rest of the informations
-        NetList.append({
-            "component": comp["component"],
-            "position": { 
-                #center the component
-                "x": topleft[0] + (abs(topleft[0] - botright[0]) / 2),
-                "y": topleft[1] + (abs(topleft[1] - botright[1]) / 2)},
-            "pins": pins
-            })
-
-    return reorderPins(NetList)
-
-def detect(img, neuralOut):
-    cdstP = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
-    _, img = cv.threshold(img, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)
-
-    #skeletonize the picture
-    img = cv.ximgproc.thinning(img)
-    #cv.imshow("", thin) 
-
-    #predicting lines 
-    linesP = cv.HoughLinesP(img, 1, np.pi / 180, 13, None, 0, 15)
-
-    lines = []
-    for line in linesP:
-        lines.append(line[0])
-
-    turtleList = [(137,247), (145,247)]
-    compPins = getCompPins(neuralOut)
-    followLine(lines, (203, 250), compPins, turtleList, cdstP)
-        
-    #draw predicted lines just for debuging
-    if linesP is not None:
-        for i in range(0, len(linesP)):
-            l = linesP[i][0]
-            cv.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 2, cv.LINE_AA)
-            cv.circle(cdstP, (l[0], l[1]), 2, (255, 0, 0), -1)
-            cv.circle(cdstP, (l[2], l[3]), 2, (255, 0, 0), -1)
-    
-    cv.line(cdstP, (137, 247), (255, 190), (255,0,255), 2, cv.LINE_AA)
-    
-    cv.imshow("closed Source", img)
-    cv.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
-    
-    cv.waitKey()
+MIN_LINE_LENGTH = 10
 
 def reorderPins(netList):
     resultNetList = []
@@ -227,15 +21,15 @@ def reorderPins(netList):
     for cmp in netList:
         if cmp['component'] in ['OPV', 'S3', 'NPN', 'PNP', 'MFET_N_D', 'MFET_N_E', 'MFET_P_D', 'MFET_P_E', 'JFET_N', 'JFET_P']:
             pins = cmp['pins']
-            center = np.array([cmp['position']['x'], cmp['position']['y']]) * 0.5 + (np.array([pins[0]['x'], pins[0]['y']]) + np.array([pins[1]['x'], pins[1]['y']]) + np.array([pins[2]['x'], pins[2]['y']])) / 3.0 * 0.5
+            center = np.asarray([cmp['position']['x'], cmp['position']['y']]) * 0.5 + (np.asarray([pins[0]['x'], pins[0]['y']]) + np.asarray([pins[1]['x'], pins[1]['y']]) + np.asarray([pins[2]['x'], pins[2]['y']])) / 3.0 * 0.5
 
             minError = float('inf')
             finalPins = pins
 
             for i in range(3):
-                single = np.array([pins[i]['x'], pins[i]['y']]) - center
-                a = np.array([pins[(i + 1) % 3]['x'], pins[(i + 1) % 3]['y']]) - center
-                b = np.array([pins[(i + 2) % 3]['x'], pins[(i + 2) % 3]['y']]) - center
+                single = np.asarray([pins[i]['x'], pins[i]['y']]) - center
+                a = np.asarray([pins[(i + 1) % 3]['x'], pins[(i + 1) % 3]['y']]) - center
+                b = np.asarray([pins[(i + 2) % 3]['x'], pins[(i + 2) % 3]['y']]) - center
 
                 singleAngle = math.atan2(single[1], single[0])
                 
@@ -260,20 +54,349 @@ def reorderPins(netList):
     
     return resultNetList
 
-def main():
-    neuralOutput = JsoncParser.parse_file('TestData/SampleNeuralOutput.jsonc')
+def scaleNeuralOutValues(neural_out, scale):
+    def scale_contained_vector(val):
+        if type(val) is dict:
+            if 'x' in val:
+                val['x'] *= scale
+                val['y'] *= scale
+                return
+            else:
+                for v in val.values():
+                    scale_contained_vector(v)
+        elif type(val) is list:
+            for v in val:
+                scale_contained_vector(v)
+        else:
+            return
+    for cmp in neural_out:
+        scale_contained_vector(cmp)
 
-    img = cv.imread("TestData/test.jpg", cv.IMREAD_GRAYSCALE)
+def isConnectedKnot(position, img):
+    """
+    Check if junction is connected (with black dot) or is just a crossing of two lines
+    position: (x, y) in px
+    img: a grayscale opencv image with black background
+    """
+    PATCH_HALF_SIZE = 15
+    patch = img[position[1]-PATCH_HALF_SIZE:position[1]+PATCH_HALF_SIZE, position[0]-PATCH_HALF_SIZE:position[0]+PATCH_HALF_SIZE]
+    patch = cv.copyMakeBorder(patch, 3, 3, 3, 3, cv.BORDER_CONSTANT, value=0)
+    _, patch = cv.threshold(patch, 127, 255, cv.THRESH_BINARY)
+
+    dist = cv.distanceTransform(patch, cv.DIST_L2, cv.DIST_MASK_3)
+
+    maxima = signal.argrelextrema(dist, np.greater, order=4)
+    
+    if maxima[0].size == 0:
+        return False
+
+    center = PATCH_HALF_SIZE + 3
+
+    dist_to_center = np.square(maxima[0] - center) + np.square(maxima[1] - center)
+    x = maxima[1][np.argmin(dist_to_center)]
+    y = maxima[0][np.argmin(dist_to_center)]
+    # print(dist[y, x])
+    # dist_norm = (dist / np.amax(dist) * 255).astype(np.uint8)
+    # cv.imshow('d', dist_norm)
+    # cv.waitKey(0)
+
+    return dist[y, x] > 2.6
+
+def angleToInterval(angle):
+    return np.arctan2(np.sin(angle), np.cos(angle))
+
+def NetListExP(neuralOut):
+    NetList = []
+    
+    for comp in neuralOut:
+        #gets topleft/bottomright cordinates
+        topleft = [comp["topleft"]["x"], comp["topleft"]["y"]]
+        botright = [comp["bottomright"]["x"], comp["bottomright"]["y"]]
+
+        pins = []
+        #iterates through the pins since their amount is variable
+        for pincoll in comp["pins"]:
+            pins.append(
+                {
+                    "x": pincoll["x"], 
+                    "y":  pincoll["y"],
+                    "id": 0
+                })
+        #fill in the rest of the informations
+        NetList.append({
+            "component": comp["component"],
+            "position": { 
+                #center the component
+                "x": topleft[0] + (abs(topleft[0] - botright[0]) / 2),
+                "y": topleft[1] + (abs(topleft[1] - botright[1]) / 2)},
+            "pins": pins
+            })
+
+    return reorderPins(NetList)
+
+def pointLinesDistances(point, lines):
+    """
+    Normal distance between a point and a line if the normal projection lies on the line segment.
+    Otherwise distance to nearest endpoint.
+    Input:
+        point: np.array [x, y]
+        lines: np.array [[x1, y1, x2, y2], ...]
+    Returns:
+        distances, index of closer endpoint
+    """
+    t = np.sum((point - lines[:, 0:2]) * (lines[:, 2:4] - lines[:, 0:2]), axis=-1) / np.sum((lines[:, 2:4] - lines[:, 0:2])**2, axis=-1)
+    t = np.maximum(np.minimum(t, 1), 0)
+
+    projections = lines[:, 0:2] + (lines[:, 2:4] - lines[:, 0:2]) * np.expand_dims(t, -1)
+    distances = np.sqrt(np.sum((point - projections)**2, axis=-1))
+
+    return distances, projections, np.where(t < 0.5, 0, 1)
+
+def findPinStart(pinPos, compType, compBox, lines, angles):
+    """
+    Finds the line best matching the pin prediction of a component.
+    Inputs:
+        pinPos: np.array [x, y]
+        compType: string ID
+        compBox: np.array [xmin, ymin, xmax, ymax]
+        lines: [[x1, y1, x2, y2], ...]
+    Reutrns:
+        line index to remove,
+        start point,
+        end point
+    """
+    lines = np.asarray(lines)
+    horizontal_mask = np.abs(np.abs(np.abs(angles) - np.pi/2) - np.pi/2) < np.pi/8
+    vertical_mask = np.abs(np.abs(angles) - np.pi/2) < np.pi/8
+    horizontal_lines = lines[horizontal_mask, :]
+    vertical_lines = lines[vertical_mask, :]
+
+    # TODO object type specific filtering for more robustness
+
+    if compType == 'PIN':
+        if compBox[2] - compBox[0] > compBox[3] - compBox[1]:
+            distances, projections, endpoint_indices = pointLinesDistances(pinPos, horizontal_lines)
+            i = np.argmin(distances)
+            line_idx = np.searchsorted(np.cumsum(horizontal_mask), i + 1)
+        else:
+            distances, projections, endpoint_indices = pointLinesDistances(pinPos, vertical_lines)
+            i = np.argmin(distances)
+            line_idx = np.searchsorted(np.cumsum(vertical_mask), i + 1)
+    else:
+        distances, projections, endpoint_indices = pointLinesDistances(pinPos, lines)
+        line_idx = i = np.argmin(distances)
+    
+    # find end point which is further away from the object center
+    center = (compBox[0:2] + compBox[2:4]) / 2.0
+    dist_a = np.sqrt(np.sum((lines[line_idx, 0:2] - center)**2))
+    dist_b = np.sqrt(np.sum((lines[line_idx, 2:4] - center)**2))
+    farther_p_idx = 0 if dist_a > dist_b else 2
+
+    return line_idx, lines[line_idx, (2-farther_p_idx):(2-farther_p_idx)+2], lines[line_idx, farther_p_idx:farther_p_idx+2]
+
+def splitComponents(img, components):
+    """
+    Split components with white image stripes to ensure a complete seperation of nets.
+    """
+    SPLIT_PERPENDICULAR = {'I2', 'C', 'I1', 'U1', 'U_AC', 'V', 'S2', 'S1', 'BTN1', 'D_Z', 'U2', 'U3', 'R', 'M', 'D_S', 'L', 'BTN2', 'D', 'C_P', 'BAT', 'LMP', 'A', 'F', 'LED', 'L2'}
+    SPLIT_BLOB = {'NPN', 'PNP', 'JFET_N', 'JFET_P', 'MFET_N_D', 'MFET_N_E', 'MFET_P_E', 'MFET_P_D', 'POT', }
+    SPLIT_THICKNESS = 9
+
+    for comp in components:
+        comp_type = comp['component']
+        cmp_box = np.asarray([comp['topleft']['x'], comp['topleft']['y'], comp['bottomright']['x'], comp['bottomright']['y']])  # [xmin, ymin, xmax, ymax]
+        center = ((cmp_box[0:2] + cmp_box[2:4]) / 2).astype(np.int32)
+        min_side_length = np.amin(cmp_box[2:4] - cmp_box[0:2])
+
+        try:
+            if comp_type in SPLIT_PERPENDICULAR:
+                # draw a line through the component to split it
+                dx = comp['pins'][1]['x'] - comp['pins'][0]['x']
+                dy = comp['pins'][1]['y'] - comp['pins'][0]['y']
+                pin_dir = np.array([dx, dy])
+                normal_vec = np.array([-dy, dx])
+                normal_vec = normal_vec / np.sqrt(np.sum(normal_vec**2))
+                pin_a = np.array([comp['pins'][0]['x'], comp['pins'][0]['y']])
+
+                cv.line(img, (pin_a + 0.4 * pin_dir - normal_vec * min_side_length * 0.6).astype(np.int32), (pin_a + 0.4 * pin_dir + normal_vec * min_side_length * 0.6).astype(np.int32), color=0, thickness=SPLIT_THICKNESS)
+                cv.line(img, (pin_a + 0.6 * pin_dir - normal_vec * min_side_length * 0.6).astype(np.int32), (pin_a + 0.6 * pin_dir + normal_vec * min_side_length * 0.6).astype(np.int32), color=0, thickness=SPLIT_THICKNESS)
+            elif comp_type == 'OPV':
+                patch = img[cmp_box[1]:cmp_box[3]+1, cmp_box[0]:cmp_box[2]+1]
+
+                # find contours in predicted patch
+                contours, _ = cv.findContours((255 - patch * 255).astype(np.uint8), cv.RETR_LIST, cv.CHAIN_APPROX_TC89_KCOS)
+                triangle = np.array([[0, 0], [2, 1], [0, 2]])
+                best_matching_score = math.inf
+                best_cnt = None
+                for cnt in contours:
+                    # search contour that closes resembles a triangle and is also near the patch center
+                    convex = cv.convexHull(cnt)
+                    r = cv.matchShapes(convex, triangle, cv.CONTOURS_MATCH_I3, 0.0)
+                    m = cv.moments(cnt)
+                    x = m['m10'] / m['m00']
+                    y = m['m01'] / m['m00']
+                    dist = math.sqrt((x + cmp_box[0] - center[0])**2 + (y + cmp_box[1] - center[1])**2)
+                    if r * dist < best_matching_score:
+                        best_matching_score = r * dist
+                        best_cnt = convex
+
+                # fill this contour, enlarge it and use as a mask to remove OPV from image
+                fill_img = np.zeros_like(img, np.uint8)
+                cv.drawContours(fill_img, [best_cnt + cmp_box[0:2]], 0, 255, cv.FILLED)
+                fill_img = cv.dilate(fill_img, np.ones((25, 25)))
+                img[fill_img > 128] = 0
+            elif comp_type in SPLIT_BLOB:
+                # draw a circle in the center of the object as a mask
+                r = int(min_side_length / 2)
+                cv.circle(img, center, r, 0, cv.FILLED)
+            elif comp_type in {'MIC', 'SPK'}:
+                pin_center = (np.array([comp['pins'][0]['x'] + comp['pins'][1]['x'], comp['pins'][0]['y'] + comp['pins'][1]['y']]) / 2).astype(np.int32)
+                direction = np.abs(pin_center - center)
+                if direction[0] > direction[1]:
+                    # object is placed horizontally
+                    cv.line(img, pin_center, (cmp_box[2], pin_center[1]), color=0, thickness=SPLIT_THICKNESS)
+                    cv.line(img, (center[0], cmp_box[1]), (center[0], cmp_box[3]), color=0, thickness=SPLIT_THICKNESS)
+                else:
+                    cv.line(img, pin_center, (pin_center[0], cmp_box[3]), color=0, thickness=SPLIT_THICKNESS)
+                    cv.line(img, (cmp_box[0], center[1]), (cmp_box[2], center[1]), color=0, thickness=SPLIT_THICKNESS)
+            elif comp_type == 'S3':
+                dir_a = np.array([comp['pins'][0]['x'] - center[0], comp['pins'][0]['y'] - center[1]])
+                dir_b = np.array([comp['pins'][1]['x'] - center[0], comp['pins'][1]['y'] - center[1]])
+                dir_c = np.array([comp['pins'][2]['x'] - center[0], comp['pins'][2]['y'] - center[1]])
+
+                if dir_a @ dir_b > 0:
+                    # dir_c is single
+                    blob_center = (np.array([comp['pins'][0]['x'] + comp['pins'][1]['x'], comp['pins'][0]['y'] + comp['pins'][1]['y']]) / 2 * 0.7 + center * 0.3).astype(np.int32)
+                elif dir_a @ dir_c > 0:
+                    # dir_b is single
+                    blob_center = (np.array([comp['pins'][0]['x'] + comp['pins'][2]['x'], comp['pins'][0]['y'] + comp['pins'][2]['y']]) / 2 * 0.7 + center * 0.3).astype(np.int32)
+                else:
+                    # dir_a is single
+                    blob_center = (np.array([comp['pins'][2]['x'] + comp['pins'][1]['x'], comp['pins'][2]['y'] + comp['pins'][1]['y']]) / 2 * 0.7 + center * 0.3).astype(np.int32)
+
+                r = int(min_side_length / 2)
+                cv.circle(img, blob_center, r, 0, cv.FILLED)
+        except Exception:
+            continue
+
+def prunePath(path, px_coor, corner_graph_indices):
+    _, corners_on_path_i, _ = np.intersect1d(path, corner_graph_indices, return_indices=True)
+    corners_on_path = path[np.sort(corners_on_path_i)]
+    
+    pruned_path = [px_coor[path[0]]]
+    pruned_path.extend(px_coor[corners_on_path])
+    pruned_path.append(px_coor[path[-1]])
+    
+    return np.asarray(pruned_path, np.int32)
+
+def detect(img, neuralOut):
+    col_img = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
+    start = time()
+    _, img = cv.threshold(img, 0, 1, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)
+
+    MORPH_CLOSING_SIZE = 7
+    img = cv.dilate(img, np.ones((MORPH_CLOSING_SIZE, MORPH_CLOSING_SIZE)))
+    img = cv.erode(img, np.ones((MORPH_CLOSING_SIZE, MORPH_CLOSING_SIZE)))
+
+    splitComponents(img, neuralOut)
+
+    # TODO: scale all values from neuralOut
+    img = cv.resize(img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
+    col_img = cv.resize(col_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
+    scaleNeuralOutValues(neuralOut, 0.5)
+
+    # skeletonize the image & produce adjacency matrix / graph
+    skeleton_img = morphology.skeletonize(img)
+    graph, px_coor = skan.csr.skeleton_to_csgraph(skeleton_img)
+    px_coor = px_coor[..., ::-1]
+    graph = scipy.sparse.csr_matrix(np.where(graph.toarray() > 0.5, 1.0, 0.0))
+
+    # TODO: remove intersections that are not connected from graph
+
+    # skeleton_img = np.where(skeleton_img, 255, 0).astype(np.uint8)
+    # cv.imshow('skeleton', skeleton_img)
+
+    # corner_dist = cv.cornerHarris(img, 5, 5, 0.05)
+    # corners = np.stack(np.where(corner_dist > 0.1 * np.amax(corner_dist)), axis=-1)[:, ::-1]
+    junctions = px_coor[np.where(np.sum(graph, axis=-1) > 2)[0]]
+    corners = cv.goodFeaturesToTrack((img * 255).astype(np.uint8), 0, 0.2, 10)
+    corners = [c.ravel() for c in corners]
+    corners.extend(junctions)
+    corners = np.asarray(corners, np.int32)
+
+    # for junc in junctions:
+    #     cv.circle(col_img, junc.astype(np.int32), 4, (0, 0, 255), -1)
+
+    # for corn in corners:
+    #     cv.circle(col_img, corn.astype(np.int32), 2, (0, 255, 0), -1)
+
+    # linesP = cv.HoughLinesP(img, 1, np.pi / 180, threshold=10, minLineLength=0, maxLineGap=15)
+
+    # lines = np.asarray([l[0] for l in linesP if ((l[0][0] - l[0][2])**2 + (l[0][1] - l[0][3])**2) > MIN_LINE_LENGTH**2])
+    # angles = list(np.arctan2(lines[:, 3] - lines[:, 1], lines[:, 2] - lines[:, 0]))
+    # lines = list(lines)
+
+    # TODO: better starting point finding (currently the neural network prediction is directly used)
+    cmp_pin_indices = []
+    pin_points = []
+    for c, cmp in enumerate(neuralOut):
+        for p, pin in enumerate(cmp['pins']):
+            # cmp_box = np.asarray([cmp['topleft']['x'], cmp['topleft']['y'], cmp['bottomright']['x'], cmp['bottomright']['y']])
+            # _, start_point, _ = findPinStart(np.asarray([pin['x'], pin['y']]), cmp['component'], cmp_box, lines, angles)
+            # cmp_pin_indices.append((c, p))
+            # start_points.append(start_point)
+            pin_points.append(np.asarray([pin['x'], pin['y']]))
+
+    # find CSR matrix index for every start point (calculate distances for all combinations)
+    pin_points = np.asarray(pin_points, np.int32)
+    meshed_indices = np.stack(np.meshgrid(np.arange(px_coor.shape[0]), np.arange(pin_points.shape[0])), -1)
+    dist = np.sum((pin_points[meshed_indices[:, :, 1]] - px_coor[meshed_indices[:, :, 0]])**2, axis=-1)
+    pin_graph_indices = np.argmin(dist, -1)
+
+    # find CSR matrix index for every corner point (calculate distances for all combinations)
+    meshed_indices = np.stack(np.meshgrid(np.arange(px_coor.shape[0]), np.arange(corners.shape[0])), -1)
+    dist = np.sum((corners[meshed_indices[:, :, 1]] - px_coor[meshed_indices[:, :, 0]])**2, axis=-1)
+    corner_graph_indices = np.argmin(dist, -1)
+
+    for sp in px_coor[pin_graph_indices]:
+        cv.circle(col_img, sp.astype(np.int32), 3, (255,0,0), -1)
+
+    nx_graph = nx.to_networkx_graph(graph)
+
+    already_connected_indices = set()
+    for i in range(len(pin_graph_indices)):
+        if i in already_connected_indices:
+            continue
+
+        for j in range(i+1, len(pin_graph_indices)):
+            if j in already_connected_indices:
+                continue
+
+            try:
+                path = np.asarray(nx.shortest_path(nx_graph, pin_graph_indices[i], pin_graph_indices[j]))
+                path = prunePath(path, px_coor, corner_graph_indices)
+
+                # temporary drawing of path
+                cv.polylines(col_img, [path], False, (0,0,255), 2)
+
+                already_connected_indices.add(i)
+                already_connected_indices.add(j)
+            except Exception:
+                continue
+
+    print(time() - start)
+
+    cv.imshow("img", col_img)
+    cv.waitKey(0)
+
+def main():
+    neuralOutput = JsoncParser.parse_file('../DataProcessing/CompleteModel/TestData/test1.json')
+    img = cv.imread("../DataProcessing/CompleteModel/TestData/test1.jpeg", cv.IMREAD_GRAYSCALE)
     detect(img, neuralOutput)
     
     #netList = NetListExP(neuralOutput)
 
     #netList = reorderPins(netList)
-
-    #opv = [cmp for cmp in netList if cmp['component'] == 'OPV']
-    #npn = [cmp for cmp in netList if cmp['component'] == 'NPN']
-    #print(opv)
-    #print(npn)
 
 if __name__ == "__main__":
     main()
