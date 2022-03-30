@@ -1,3 +1,6 @@
+from math import atan2
+
+
 ScalingFactor = 11.5
 
 def ListToLatex(netlist, linelist):
@@ -75,12 +78,6 @@ def drawComponents(scale, netlist):
             components += drawCommon2Pin(netlist[i], scale, "european current source")
         elif(compName == "I2"):
             components += drawCommon2Pin(netlist[i], scale, "american current source")
-        elif(compName == "JFET_N"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2 #Use Drain and Source for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "JFET_N" + str(i), "njfet, scale ="+ str(compscale), "D", "G", "S")
-        elif(compName == "JFET_P"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2 #Use Drain and Source for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "JFET_P" + str(i), "pjfet, scale ="+ str(compscale), "S", "G", "D")
         elif(compName == "L"):
             components += drawCommon2Pin(netlist[i], scale, "inductor")
         elif(compName == "LED"):
@@ -89,31 +86,16 @@ def drawComponents(scale, netlist):
             components += drawCommon2Pin(netlist[i], scale, "lamp")
         elif(compName == "M"):
             components += drawCommon2Pin(netlist[i], scale, "rmeter, t=M")
-        elif(compName == "MFET_N_D"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2 #Use Drain and Source for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "MFET_N_D" + str(i), "nigfetd, solderdot,scale ="+ str(compscale), "D", "G", "S")
-        elif(compName == "MFET_N_E"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2#Use Drain and Source for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "MFET_N_E" + str(i), "nigfete, solderdot,scale ="+ str(compscale), "D", "G", "S")
-        elif(compName == "MFET_P_D"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2 #Use Drain and Source for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "MFET_P_D" + str(i), "pigfetd,solderdot,yscale=-1,scale ="+ str(compscale), "D", "G", "S")
-        elif(compName == "MFET_P_E"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2 #Use Drain and Source for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "MFET_P_E" + str(i), "pigfete,solderdot,yscale=-1,scale ="+ str(compscale), "D", "G", "S")
         elif(compName == "MIC"):
             components += drawCommon2Pin(netlist[i], scale, "mic")
-        elif(compName == "NPN"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2 #Use Collector and Emitter for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "NPN" + str(i), "npn, scale ="+ str(compscale), "C", "B", "E")
         elif(compName == "OPV"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][1]["y"]*scale) #Use + and - connectors of up amp for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "OPV" + str(i), "op amp,yscale=-1, scale =" + str(compscale), "+","out","-")
+            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][1]["y"]*scale)/2 #Use + and - connectors of up amp for scale reference
+            if(netlist[i]["pins"][0]["y"] > netlist[i]["pins"][1]["y"]):
+                components += drawCommon3Pin(netlist[i], scale, "OPV" + str(i), "op amp,yscale=-1,scale =" + str(compscale), "-","+","out")
+            else:
+                components += drawCommon3Pin(netlist[i], scale, "OPV" + str(i), "op amp, scale =" + str(compscale), "-","+","out")
         elif(compName == "PIN"):
             components += drawPin(netlist[i], scale, "short,o-")
-        elif(compName == "PNP"):
-            compscale = abs(netlist[i]["pins"][0]["y"]*scale - netlist[i]["pins"][2]["y"]*scale)/2 #Use Collector and Emitter for scale reference
-            components += drawCommon3Pin(netlist[i], scale, "PNP" + str(i), "pnp, scale ="+ str(compscale), "E", "B", "C")
         elif(compName == "POT"):
             components += drawCommon3Pin(netlist[i], scale, "POT" + str(i), "genericpotentiometershape", "wiper", "left", "right")
         elif(compName == "R"):
@@ -138,11 +120,54 @@ def drawComponents(scale, netlist):
             components += drawCommon2Pin(netlist[i], scale, "rmeter, t=V")
         elif(compName == "L2"):
             components += drawCommon2Pin(netlist[i], scale, "american current source")
-
+        #Transistor
+        elif(compName == "JFET_N"):
+            components += drawTransistor(i,netlist[i], scale,"njfet", True)
+        elif(compName == "JFET_P"):
+            components += drawTransistor(i,netlist[i], scale,"pjfet", True)
+        elif(compName == "MFET_N_D"):
+            components += drawTransistor(i,netlist[i], scale,"nigfetd, solderdot", True)
+        elif(compName == "MFET_N_E"):
+            components += drawTransistor(i,netlist[i], scale,"nigfete, solderdot", True)
+        elif(compName == "MFET_P_D"):
+            components += drawTransistor(i,netlist[i], scale,"pigfetd,solderdot,yscale=-1", True)
+        elif(compName == "MFET_P_E"):
+            components += drawTransistor(i,netlist[i], scale,"pigfete,solderdot,yscale=-1", True)
+        elif(compName == "NPN"):
+            components += drawTransistor(i,netlist[i], scale, "npn", False)
+        elif(compName == "PNP"):
+            components += drawTransistor(i,netlist[i], scale, "pnp", False)
     return components
 
-def calcPins(compoenent):
-    return compoenent
+def drawTransistor(id,component, scale ,type, fet):
+    component["position"]["y"] = component["pins"][0]["y"]
+    component["position"]["x"] = component["pins"][1]["x"]
+    compscale = abs(component["pins"][1]["y"]*scale - component["pins"][2]["y"]*scale)/2 #Use Drain and Source for scale reference
+    if(fet):
+        c1 = "G"
+        c2 = "D"
+        c3 = "S"
+    else:
+        c1 = "B"
+        c2 = "C"
+        c3 = "E"
+    if(10-component["pins"][1]["y"]*scale < 10-component["pins"][2]["y"]*scale):
+        tmp = c2
+        c2 = c3
+        c3 = tmp
+    return drawCommon3Pin(component, scale, "Transistor" + str(id), type + ", scale ="+ str(compscale),c1,c2,c3)
+
+def drawPin(component, scale, type):
+    return "\draw (" + str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") to ["+type+"] (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ");\n"
+
+def drawCommon1Pin(component, scale, type):
+    return "\draw (" + str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") -- (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") node["+type+"]{};\n"
+
+def drawCommon2Pin(component, scale, type):
+    return "\draw (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") to["+type+"] (" + str(component["pins"][1]["x"]*scale) + "," + str(ScalingFactor-component["pins"][1]["y"]*scale) + ");\n"
+
+def drawCommon3Pin(component, scale, nodeID, type, c1,c2,c3):
+    return "\draw ("+ str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") node["+type+"]("+nodeID+") {} ("+nodeID+"."+ c1 +") to[short] (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") ("+nodeID+"."+c2+") to[short] (" + str(component["pins"][1]["x"]*scale) + "," + str(ScalingFactor-component["pins"][1]["y"]*scale) + ") ("+nodeID+"."+c3+") to[short] (" + str(component["pins"][2]["x"]*scale) + "," + str(ScalingFactor-component["pins"][2]["y"]*scale) + ");\n"
 
 def drawLineList(scale, linelist):
     lines = ""
@@ -164,18 +189,3 @@ def drawLine(point,net,scale):
         if(net["points"].index(point) < point["connected"][0]):
             lines += drawLine(net["points"][point["connected"][0]], net, scale)
         return lines
-
-def drawPin(component, scale, type):
-    return "\draw (" + str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") to ["+type+"] (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ");\n"
-
-def drawCommon1Pin(component, scale, type):
-    return "\draw (" + str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") -- (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") node["+type+"]{};\n"
-
-def drawCommon2Pin(component, scale, type):
-    return "\draw (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") to["+type+"] (" + str(component["pins"][1]["x"]*scale) + "," + str(ScalingFactor-component["pins"][1]["y"]*scale) + ");\n"
-
-def drawCommon3Pin(component, scale, nodeID, type, c1,c2,c3):
-    return "\draw ("+ str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") node["+type+"]("+nodeID+") {} ("+nodeID+"."+ c1 +") to[short] (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") ("+nodeID+"."+c2+") to[short] (" + str(component["pins"][1]["x"]*scale) + "," + str(ScalingFactor-component["pins"][1]["y"]*scale) + ") ("+nodeID+"."+c3+") to[short] (" + str(component["pins"][2]["x"]*scale) + "," + str(ScalingFactor-component["pins"][2]["y"]*scale) + ");\n"
-
-def GetCord():
-    return
