@@ -3,16 +3,13 @@ import cv2
 import base64
 import numpy as np
 import json
+import traceback
 
 from .src import LineDetection
 from .src import Latex
 from .src import loging
 from .src import utils
 
-#<-- Test data
-Testlinelist = '[]'
-Testnetlist = '[{"component": "PIN", "position": {"x": 730.0, "y": 117.5}, "pins": [{"x": 786, "y": 109, "id": 0}]}, {"component": "PIN", "position": {"x": 470.0, "y": 297.0}, "pins": [{"x": 408, "y": 289, "id": 0}]}, {"component": "PIN", "position": {"x": 868.5, "y": 299.5}, "pins": [{"x": 819, "y": 293, "id": 0}]}, {"component": "PIN", "position": {"x": 718.5, "y": 327.5}, "pins": [{"x": 768, "y": 327, "id": 0}]}, {"component": "PIN", "position": {"x": 455.5, "y": 194.5}, "pins": [{"x": 392, "y": 186, "id": 0}]}, {"component": "PIN", "position": {"x": 858.5, "y": 116.0}, "pins": [{"x": 811, "y": 116, "id": 0}]}, {"component": "GND", "position": {"x": 182.5, "y": 321.5}, "pins": [{"x": 182, "y": 272, "id": 0}]}, {"component": "C", "position": {"x": 133.5, "y": 97.5}, "pins": [{"x": 188, "y": 81, "id": 0}, {"x": 72, "y": 97, "id": 0}]}, {"component": "R", "position": {"x": 293.5, "y": 59.5}, "pins": [{"x": 220, "y": 50, "id": 0}, {"x": 359, "y": 55, "id": 0}]}, {"component": "OPV", "position": {"x": 288.5, "y": 164.0}, "pins": [{"x": 202, "y": 135, "id": 0}, {"x": 366, "y": 187, "id": 0}, {"x": 202, "y": 193, "id": 0}]}]'
-#--> To Remove
 class Neural:
     def __init__(self):
         loging.Init()
@@ -62,19 +59,26 @@ class Neural:
             loging.Warn("Serving server down")
             resp.status = 400
             return
-        # Use linedetection to generate netlist and linelist
-        # netList, lineList = LineDetection.detect(utils.parseNeuralOutput(neuralOutput), image)
+
+
         if(len(neuralOutput.json()["outputs"]["pins"]) < 1):
             loging.Warn("Empty output")
             resp.status = 500
             return
-        netList = LineDetection.NetListExP(utils.parseNeuralOutput(neuralOutput))
-        lineList = json.loads(Testlinelist)
-        output = {
-        }
-        if("netList" in outputMethodes): output["netList"] = netList
-        if("lineList" in outputMethodes): output["lineList"] = lineList
-        if("latex" in outputMethodes): output["latex"] = Latex.ListToLatex(netList, lineList)
+
+        try:
+            # Use linedetection to generate netlist and linelist
+            netList, lineList = LineDetection.detect(utils.parseNeuralOutput(neuralOutput), image)
+
+            output = {
+            }
+
+            if("netList" in outputMethodes): output["netList"] = netList
+            if("lineList" in outputMethodes): output["lineList"] = lineList
+            if("latex" in outputMethodes): output["latex"] = Latex.ListToLatex(netList, lineList)
+        except Exception:
+            loging.Warn("Exception: " + traceback.format_exc())
+
         # Send back requested data
         if(onWebsite):
             msg = ""

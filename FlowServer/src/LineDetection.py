@@ -285,8 +285,6 @@ def pruneGraph(pts, adjacency):
     return pts, adjacency
 
 def buildNetGraphs(img, neuralOut):
-    col_img = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
-    start = time()
     _, img = cv.threshold(img, 0, 1, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)
 
     MORPH_CLOSING_SIZE = 7
@@ -296,7 +294,6 @@ def buildNetGraphs(img, neuralOut):
     splitComponents(img, neuralOut)
 
     img = cv.resize(img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
-    col_img = cv.resize(col_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
     scaleNeuralOutValues(neuralOut, 0.5)
 
     # skeletonize the image & produce adjacency matrix / graph
@@ -426,13 +423,16 @@ def buildNetGraphs(img, neuralOut):
         graph.remove_nodes_from(list(nx.isolates(graph)))
         net_graphs.append(graph)
 
-    print(time() - start)
-
-    cv.imshow("img", col_img)
-    cv.waitKey(0)
     return net_graphs
 
-def NetListExP(neuralOut):
+def NetListExP(neuralOut, net_graphs):
+    points = []
+    net_ids = []
+    for i, graph in enumerate(net_graphs):
+        net_ids.extend([i] * len(list(graph.nodes)))
+        for n in graph.nodes(data='pos'):
+            points.append(n[1])
+    points = np.array(points)
     NetList = []
     
     for comp in neuralOut:
@@ -443,11 +443,17 @@ def NetListExP(neuralOut):
         pins = []
         #iterates through the pins since their amount is variable
         for pincoll in comp["pins"]:
+            x = pincoll["x"]
+            y = pincoll["y"]
+            dist = np.sum((points - [x, y])**2, axis=-1)
+            nearest = np.argmin(dist)
+            x = points[nearest][0]
+            y = points[nearest][1]
             pins.append(
                 {
-                    "x": pincoll["x"], 
-                    "y":  pincoll["y"],
-                    "id": 0
+                    "x": x, 
+                    "y": y,
+                    "id": net_ids[nearest]
                 })
         #fill in the rest of the informations
         NetList.append({
@@ -459,12 +465,42 @@ def NetListExP(neuralOut):
             "pins": pins
             })
 
-    return reorderPins(NetList)
+    return NetList#reorderPins(NetList)
+
+def lineList(neural_out, net_graphs):
+    line_list = []
+    for g in net_graphs:
+        points = []
+        successors = dict(nx.bfs_successors(g, 0))
+        for n in g.nodes:
+            if n not in successors:
+                successors[n] = []
+        succ_to_idx = {}
+        for n in successors.keys():
+            points.append({
+                "pos": {
+                    "x": g.nodes[n]['pos'][0],
+                    "y": g.nodes[n]['pos'][1]
+                },
+                "connected": []
+            })
+            succ_to_idx[n] = len(points) - 1
+
+        for n, succ in successors.items():
+            points[succ_to_idx[n]]['connected'] = [succ_to_idx[s] for s in succ]
+
+        net = {"points" : points}
+        line_list.append(net)
+    return line_list
+
+def detect(neural_out, img):
+    net_graphs = buildNetGraphs(img, neural_out)
+
+    return NetListExP(neural_out, net_graphs), lineList(neural_out, net_graphs)
 
 def main():
     neuralOutput = JsoncParser.parse_file('../DataProcessing/CompleteModel/TestData/test1.json')
     img = cv.imread("../DataProcessing/CompleteModel/TestData/test1.jpeg", cv.IMREAD_GRAYSCALE)
-    net_graphs = buildNetGraphs(img, neuralOutput)
     
     #netList = NetListExP(neuralOutput)
 

@@ -31,11 +31,10 @@ def getScale(netlist, linelist):
                 xMax = netlist[i]["pins"][x]["x"]
     for i in range(0,len(linelist)):
         for x in range(0, len(linelist[i]["points"])):
-            for y in range(0, len(linelist[i]["points"][x])):
-                if(yMax < linelist[i]["points"][y]["pos"]["y"]):
-                    yMax = linelist[i]["points"][y]["pos"]["y"]
-                if(xMax < linelist[i]["points"][y]["pos"]["x"]):
-                    xMax = linelist[i]["points"][y]["pos"]["x"]
+            if(yMax < linelist[i]["points"][x]["pos"]["y"]):
+                yMax = linelist[i]["points"][x]["pos"]["y"]
+            if(xMax < linelist[i]["points"][x]["pos"]["x"]):
+                xMax = linelist[i]["points"][x]["pos"]["x"]
     if(yMax < xMax):
         return ScalingFactor/xMax
     else:
