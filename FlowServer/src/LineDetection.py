@@ -12,6 +12,8 @@ from skimage import morphology
 import skan
 import networkx as nx
 from jsonc_parser.parser import JsoncParser
+from sklearn import cluster
+from urllib3 import Retry
 
 MIN_LINE_LENGTH = 10
 
@@ -104,35 +106,6 @@ def isConnectedKnot(position, img):
 
 def angleToInterval(angle):
     return np.arctan2(np.sin(angle), np.cos(angle))
-
-def NetListExP(neuralOut):
-    NetList = []
-    
-    for comp in neuralOut:
-        #gets topleft/bottomright cordinates
-        topleft = [comp["topleft"]["x"], comp["topleft"]["y"]]
-        botright = [comp["bottomright"]["x"], comp["bottomright"]["y"]]
-
-        pins = []
-        #iterates through the pins since their amount is variable
-        for pincoll in comp["pins"]:
-            pins.append(
-                {
-                    "x": pincoll["x"], 
-                    "y":  pincoll["y"],
-                    "id": 0
-                })
-        #fill in the rest of the informations
-        NetList.append({
-            "component": comp["component"],
-            "position": { 
-                #center the component
-                "x": topleft[0] + (abs(topleft[0] - botright[0]) / 2),
-                "y": topleft[1] + (abs(topleft[1] - botright[1]) / 2)},
-            "pins": pins
-            })
-
-    return reorderPins(NetList)
 
 def pointLinesDistances(point, lines):
     """
@@ -289,7 +262,29 @@ def prunePath(path, px_coor, corner_graph_indices):
     
     return np.asarray(pruned_path, np.int32)
 
-def detect(img, neuralOut):
+def isCorner(a, b, c):
+    v1 = a - b
+    v2 = c - b
+    cos_a = (v1 @ v2) / (np.sqrt(np.sum(v1**2)) * np.sqrt(np.sum(v2**2)))
+    return abs(cos_a) < 0.85
+
+def pruneGraph(pts, adjacency):
+    for i in range(len(adjacency)):
+        if np.count_nonzero(adjacency[i]) != 3:
+            continue
+
+        a = np.argmax(adjacency[i])
+        c = len(adjacency) - np.argmax(adjacency[i][::-1]) - 1
+
+        if not isCorner(pts[a], pts[i], pts[c]):
+            adjacency[a, c] = 1
+            adjacency[c, a] = 1
+            adjacency[i, :] = 0
+            adjacency[:, i] = 0
+
+    return pts, adjacency
+
+def buildNetGraphs(img, neuralOut):
     col_img = np.copy(cv.cvtColor(img, cv.COLOR_GRAY2BGR))
     start = time()
     _, img = cv.threshold(img, 0, 1, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)
@@ -300,7 +295,6 @@ def detect(img, neuralOut):
 
     splitComponents(img, neuralOut)
 
-    # TODO: scale all values from neuralOut
     img = cv.resize(img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
     col_img = cv.resize(col_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
     scaleNeuralOutValues(neuralOut, 0.5)
@@ -313,8 +307,9 @@ def detect(img, neuralOut):
 
     # TODO: remove intersections that are not connected from graph
 
-    # skeleton_img = np.where(skeleton_img, 255, 0).astype(np.uint8)
+    skeleton_img = np.where(skeleton_img, 255, 0).astype(np.uint8)
     # cv.imshow('skeleton', skeleton_img)
+    # cv.waitKey(0)
 
     # corner_dist = cv.cornerHarris(img, 5, 5, 0.05)
     # corners = np.stack(np.where(corner_dist > 0.1 * np.amax(corner_dist)), axis=-1)[:, ::-1]
@@ -329,6 +324,8 @@ def detect(img, neuralOut):
 
     # for corn in corners:
     #     cv.circle(col_img, corn.astype(np.int32), 2, (0, 255, 0), -1)
+    # cv.imshow('', col_img)
+    # cv.waitKey()
 
     # linesP = cv.HoughLinesP(img, 1, np.pi / 180, threshold=10, minLineLength=0, maxLineGap=15)
 
@@ -358,15 +355,18 @@ def detect(img, neuralOut):
     dist = np.sum((corners[meshed_indices[:, :, 1]] - px_coor[meshed_indices[:, :, 0]])**2, axis=-1)
     corner_graph_indices = np.argmin(dist, -1)
 
-    for sp in px_coor[pin_graph_indices]:
-        cv.circle(col_img, sp.astype(np.int32), 3, (255,0,0), -1)
+    # for sp in px_coor[pin_graph_indices]:
+    #     cv.circle(col_img, sp.astype(np.int32), 3, (255,0,0), -1)
 
     nx_graph = nx.to_networkx_graph(graph)
 
+    net_list = []
     already_connected_indices = set()
     for i in range(len(pin_graph_indices)):
         if i in already_connected_indices:
             continue
+
+        net_list.append([])
 
         for j in range(i+1, len(pin_graph_indices)):
             if j in already_connected_indices:
@@ -375,24 +375,96 @@ def detect(img, neuralOut):
             try:
                 path = np.asarray(nx.shortest_path(nx_graph, pin_graph_indices[i], pin_graph_indices[j]))
                 path = prunePath(path, px_coor, corner_graph_indices)
+                net_list[-1].append(path)
 
                 # temporary drawing of path
-                cv.polylines(col_img, [path], False, (0,0,255), 2)
+                # cv.polylines(col_img, [path], False, (0,0,255), 2)
 
                 already_connected_indices.add(i)
                 already_connected_indices.add(j)
             except Exception:
                 continue
+        
+        if not net_list[-1]:
+            net_list[-1].append([px_coor[pin_graph_indices[i]]])
+
+    net_graphs: List[nx.Graph] = []
+
+    for net in net_list:
+        points = np.concatenate(net)
+        path_idcs = np.concatenate([[i] * len(net[i]) for i in range(len(net))])
+        pt_idcs = np.concatenate([[j for j in range(len(net[i]))] for i in range(len(net))])
+
+        # end_idcs = np.cumsum([len(p) for p in net]) - 1
+        # start_idcs = np.concatenate(([0], np.cumsum([len(p) for p in net[:-1]], dtype=np.int32),))
+        clusters = cluster.DBSCAN(eps=10, min_samples=1).fit(points)
+        
+        new_pts = [None] * (np.amax(clusters.labels_) + 1)
+        adjacency_matrix = np.zeros((np.amax(clusters.labels_) + 1, np.amax(clusters.labels_) + 1))
+
+        for l in range(np.amax(clusters.labels_) + 1):
+            cluster_idcs = np.where(clusters.labels_ == l)[0]
+            cluster_pts = points[cluster_idcs]
+            avg_pt = np.sum(cluster_pts, 0) / len(cluster_pts)
+            new_pts[l] = avg_pt
+
+            adjacency_matrix[l, l] = 1
+
+            for i in cluster_idcs:
+                a = np.where(np.logical_and(pt_idcs == max(pt_idcs[i] - 1, 0), path_idcs == path_idcs[i]))[0][0]
+                b = np.where(np.logical_and(pt_idcs == min(pt_idcs[i] + 1, len(net[path_idcs[i]]) - 1), path_idcs == path_idcs[i]))[0][0]
+                a_label = clusters.labels_[a]
+                b_label = clusters.labels_[b]
+                adjacency_matrix[l, a_label] = 1
+                adjacency_matrix[l, b_label] = 1
+
+        new_pts, adjacency_matrix = pruneGraph(new_pts, adjacency_matrix)
+        graph: nx.Graph = nx.from_numpy_array(adjacency_matrix)
+        for n in list(graph):
+            graph.nodes[n]['pos'] = new_pts[n]
+
+        graph.remove_nodes_from(list(nx.isolates(graph)))
+        net_graphs.append(graph)
 
     print(time() - start)
 
     cv.imshow("img", col_img)
     cv.waitKey(0)
+    return net_graphs
+
+def NetListExP(neuralOut):
+    NetList = []
+    
+    for comp in neuralOut:
+        #gets topleft/bottomright cordinates
+        topleft = [comp["topleft"]["x"], comp["topleft"]["y"]]
+        botright = [comp["bottomright"]["x"], comp["bottomright"]["y"]]
+
+        pins = []
+        #iterates through the pins since their amount is variable
+        for pincoll in comp["pins"]:
+            pins.append(
+                {
+                    "x": pincoll["x"], 
+                    "y":  pincoll["y"],
+                    "id": 0
+                })
+        #fill in the rest of the informations
+        NetList.append({
+            "component": comp["component"],
+            "position": { 
+                #center the component
+                "x": topleft[0] + (abs(topleft[0] - botright[0]) / 2),
+                "y": topleft[1] + (abs(topleft[1] - botright[1]) / 2)},
+            "pins": pins
+            })
+
+    return reorderPins(NetList)
 
 def main():
     neuralOutput = JsoncParser.parse_file('../DataProcessing/CompleteModel/TestData/test1.json')
     img = cv.imread("../DataProcessing/CompleteModel/TestData/test1.jpeg", cv.IMREAD_GRAYSCALE)
-    detect(img, neuralOutput)
+    net_graphs = buildNetGraphs(img, neuralOutput)
     
     #netList = NetListExP(neuralOutput)
 
