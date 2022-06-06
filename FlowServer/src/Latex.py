@@ -1,12 +1,11 @@
-from math import atan2
-
+import math
 
 ScalingFactor = 11.5
 
 def ListToLatex(netlist, linelist):
     scale = getScale(netlist, linelist)
     components = drawComponents(scale, netlist)
-    lines = drawLineList(scale, linelist)
+    lines = drawLineList(scale, linelist, netlist)
     return PrepareOutput(components, lines)
 
 def PrepareOutput(components, lines):
@@ -160,7 +159,7 @@ def drawPin(component, scale, type):
     return "\draw (" + str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") to ["+type+"] (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ");\n"
 
 def drawCommon1Pin(component, scale, type):
-    return "\draw (" + str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") -- (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") node["+type+"]{};\n"
+    return "\draw (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") -- (" + str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") node["+type+"]{};\n"
 
 def drawCommon2Pin(component, scale, type):
     return "\draw (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") to["+type+"] (" + str(component["pins"][1]["x"]*scale) + "," + str(ScalingFactor-component["pins"][1]["y"]*scale) + ");\n"
@@ -168,23 +167,50 @@ def drawCommon2Pin(component, scale, type):
 def drawCommon3Pin(component, scale, nodeID, type, c1,c2,c3):
     return "\draw ("+ str(component["position"]["x"]*scale) + "," + str(ScalingFactor-component["position"]["y"]*scale) + ") node["+type+"]("+nodeID+") {} ("+nodeID+"."+ c1 +") to[short] (" + str(component["pins"][0]["x"]*scale) + "," + str(ScalingFactor-component["pins"][0]["y"]*scale) + ") ("+nodeID+"."+c2+") to[short] (" + str(component["pins"][1]["x"]*scale) + "," + str(ScalingFactor-component["pins"][1]["y"]*scale) + ") ("+nodeID+"."+c3+") to[short] (" + str(component["pins"][2]["x"]*scale) + "," + str(ScalingFactor-component["pins"][2]["y"]*scale) + ");\n"
 
-def drawLineList(scale, linelist):
+def drawLineList(scale, linelist, netList):
     lines = ""
     for i in range(0, len(linelist)):
-        lines += drawLine(linelist[i]["points"][0], linelist[i], scale)
+        lines += drawLine(linelist[i]["points"][0], linelist[i], scale, netList)
     return lines
 
-def drawLine(point,net,scale):
+def numConnections(pt, net, netList):
+    num = len(pt["connected"])
+    for n in netList:
+        for pin in n["pins"]:
+            dist = (pin["x"] - pt["pos"]["x"])**2 + (pin["y"] - pt["pos"]["y"])**2
+            if dist < 1:
+                num += 1
+    curr_idx = 0
+    for i, p in enumerate(net['points']):
+        if p == pt:
+            curr_idx = i
+            break
+    for p in net['points']:
+        if curr_idx in p['connected']:
+            num += 1
+    return num
+
+def drawLine(point,net,scale, netList):
     if(len(point["connected"])<1): return ""
-    if(len(point["connected"])>1):
-        lines = ""
-        for i in range(0, len(point["connected"])):
-            lines += "\draw (" + str(point["pos"]["x"]*scale) + "," + str(ScalingFactor-point["pos"]["y"]*scale) + ") to [short, *-] (" + str(net["points"][point["connected"][i]]["pos"]["x"]*scale) + "," + str(ScalingFactor - net["points"][point["connected"][i]]["pos"]["y"]*scale) + ");\n"
-            if(net["points"].index(point) < point["connected"][i]):
-                lines += drawLine(net["points"][point["connected"][i]], net, scale)
-        return lines
-    else:
-        lines = "\draw (" + str(point["pos"]["x"]*scale) + "," + str(ScalingFactor-point["pos"]["y"]*scale) + ") to [short] (" + str(net["points"][point["connected"][0]]["pos"]["x"]*scale) + "," + str(ScalingFactor - net["points"][point["connected"][0]]["pos"]["y"]*scale) + ");\n"            
-        if(net["points"].index(point) < point["connected"][0]):
-            lines += drawLine(net["points"][point["connected"][0]], net, scale)
-        return lines
+    lines = ""
+    for i in range(0, len(point["connected"])):
+        if numConnections(point, net, netList) > 2:
+            thick_point_str = ", *-"
+        else:
+            thick_point_str = ", -"
+        
+        if numConnections(net["points"][point["connected"][i]], net, netList) > 2:
+            thick_point_str += "*"
+        
+        lines += "\draw (" + str(point["pos"]["x"]*scale) + "," + str(ScalingFactor-point["pos"]["y"]*scale) + ") to [short"+thick_point_str+"] (" + str(net["points"][point["connected"][i]]["pos"]["x"]*scale) + "," + str(ScalingFactor - net["points"][point["connected"][i]]["pos"]["y"]*scale) + ");\n"
+        if(net["points"].index(point) < point["connected"][i]):
+            lines += drawLine(net["points"][point["connected"][i]], net, scale, netList)
+    return lines
+    # else:
+    #     thick_point_str = ""
+
+
+    #     lines = "\draw (" + str(point["pos"]["x"]*scale) + "," + str(ScalingFactor-point["pos"]["y"]*scale) + ") to [short"+thick_point_str+"] (" + str(net["points"][point["connected"][0]]["pos"]["x"]*scale) + "," + str(ScalingFactor - net["points"][point["connected"][0]]["pos"]["y"]*scale) + ");\n"            
+    #     if(net["points"].index(point) < point["connected"][0]):
+    #         lines += drawLine(net["points"][point["connected"][0]], net, scale)
+    #     return lines

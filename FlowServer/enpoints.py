@@ -45,6 +45,7 @@ class Neural:
                     elif part.name == 'latex':
                         outputMethodes.append("latex")
         except:
+            loging.Warn("Exception: " + traceback.format_exc())
             resp.staus = 400
             return
         if(imageBase64 == "" or len(outputMethodes)<1):
@@ -78,6 +79,8 @@ class Neural:
             if("latex" in outputMethodes): output["latex"] = Latex.ListToLatex(netList, lineList)
         except Exception:
             loging.Warn("Exception: " + traceback.format_exc())
+            resp.staus = 400
+            return
 
         # Send back requested data
         if(onWebsite):

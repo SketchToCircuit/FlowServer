@@ -265,12 +265,17 @@ def prunePath(path, px_coor, corner_graph_indices):
 def isCorner(a, b, c):
     v1 = a - b
     v2 = c - b
+    if np.sum(v1**2) < 0.1 or np.sum(v2**2) < 0.1:
+        return False
     cos_a = (v1 @ v2) / (np.sqrt(np.sum(v1**2)) * np.sqrt(np.sum(v2**2)))
     return abs(cos_a) < 0.85
 
-def pruneGraph(pts, adjacency):
+def pruneGraph(pts, adjacency, is_pin_list):
     for i in range(len(adjacency)):
         if np.count_nonzero(adjacency[i]) != 3:
+            continue
+
+        if is_pin_list[i]:
             continue
 
         a = np.argmax(adjacency[i])
@@ -282,11 +287,12 @@ def pruneGraph(pts, adjacency):
             adjacency[i, :] = 0
             adjacency[:, i] = 0
 
-    return pts, adjacency
+    return adjacency
 
 def buildNetGraphs(img, neuralOut):
+    cv.imwrite('FlowServer/log/original.jpg', img)
     _, img = cv.threshold(img, 0, 1, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)
-
+    
     MORPH_CLOSING_SIZE = 7
     img = cv.dilate(img, np.ones((MORPH_CLOSING_SIZE, MORPH_CLOSING_SIZE)))
     img = cv.erode(img, np.ones((MORPH_CLOSING_SIZE, MORPH_CLOSING_SIZE)))
@@ -294,6 +300,7 @@ def buildNetGraphs(img, neuralOut):
     splitComponents(img, neuralOut)
 
     img = cv.resize(img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
+    col_img = cv.cvtColor(img * 255, cv.COLOR_GRAY2BGR)
     scaleNeuralOutValues(neuralOut, 0.5)
 
     # skeletonize the image & produce adjacency matrix / graph
@@ -305,6 +312,7 @@ def buildNetGraphs(img, neuralOut):
     # TODO: remove intersections that are not connected from graph
 
     skeleton_img = np.where(skeleton_img, 255, 0).astype(np.uint8)
+    cv.imwrite('FlowServer/log/skeleton.jpg', skeleton_img)
     # cv.imshow('skeleton', skeleton_img)
     # cv.waitKey(0)
 
@@ -352,9 +360,6 @@ def buildNetGraphs(img, neuralOut):
     dist = np.sum((corners[meshed_indices[:, :, 1]] - px_coor[meshed_indices[:, :, 0]])**2, axis=-1)
     corner_graph_indices = np.argmin(dist, -1)
 
-    # for sp in px_coor[pin_graph_indices]:
-    #     cv.circle(col_img, sp.astype(np.int32), 3, (255,0,0), -1)
-
     nx_graph = nx.to_networkx_graph(graph)
 
     net_list = []
@@ -375,7 +380,7 @@ def buildNetGraphs(img, neuralOut):
                 net_list[-1].append(path)
 
                 # temporary drawing of path
-                # cv.polylines(col_img, [path], False, (0,0,255), 2)
+                cv.polylines(col_img, [path], False, (0,0,255), 1)
 
                 already_connected_indices.add(i)
                 already_connected_indices.add(j)
@@ -392,11 +397,10 @@ def buildNetGraphs(img, neuralOut):
         path_idcs = np.concatenate([[i] * len(net[i]) for i in range(len(net))])
         pt_idcs = np.concatenate([[j for j in range(len(net[i]))] for i in range(len(net))])
 
-        # end_idcs = np.cumsum([len(p) for p in net]) - 1
-        # start_idcs = np.concatenate(([0], np.cumsum([len(p) for p in net[:-1]], dtype=np.int32),))
         clusters = cluster.DBSCAN(eps=10, min_samples=1).fit(points)
         
         new_pts = [None] * (np.amax(clusters.labels_) + 1)
+        is_pin_list = [False] * (np.amax(clusters.labels_) + 1)
         adjacency_matrix = np.zeros((np.amax(clusters.labels_) + 1, np.amax(clusters.labels_) + 1))
 
         for l in range(np.amax(clusters.labels_) + 1):
@@ -408,6 +412,9 @@ def buildNetGraphs(img, neuralOut):
             adjacency_matrix[l, l] = 1
 
             for i in cluster_idcs:
+                if pt_idcs[i] == 0 or pt_idcs[i] == len(net[path_idcs[i]]) - 1:
+                    is_pin_list[l] = True
+
                 a = np.where(np.logical_and(pt_idcs == max(pt_idcs[i] - 1, 0), path_idcs == path_idcs[i]))[0][0]
                 b = np.where(np.logical_and(pt_idcs == min(pt_idcs[i] + 1, len(net[path_idcs[i]]) - 1), path_idcs == path_idcs[i]))[0][0]
                 a_label = clusters.labels_[a]
@@ -415,13 +422,22 @@ def buildNetGraphs(img, neuralOut):
                 adjacency_matrix[l, a_label] = 1
                 adjacency_matrix[l, b_label] = 1
 
-        new_pts, adjacency_matrix = pruneGraph(new_pts, adjacency_matrix)
+        adjacency_matrix = pruneGraph(new_pts, adjacency_matrix, is_pin_list)
         graph: nx.Graph = nx.from_numpy_array(adjacency_matrix)
         for n in list(graph):
             graph.nodes[n]['pos'] = new_pts[n]
 
         graph.remove_nodes_from(list(nx.isolates(graph)))
+
+        for n in list(graph):
+            cv.circle(col_img, np.int32(graph.nodes[n]['pos']), 2, (255,0,0), -1)
+
         net_graphs.append(graph)
+
+    for sp in px_coor[pin_graph_indices]:
+        cv.circle(col_img, sp.astype(np.int32), 2, (0,255,0), -1)
+
+    cv.imwrite('FlowServer/log/marked.jpg', col_img)
 
     return net_graphs
 
@@ -465,13 +481,13 @@ def NetListExP(neuralOut, net_graphs):
             "pins": pins
             })
 
-    return NetList#reorderPins(NetList)
+    return reorderPins(NetList)
 
 def lineList(neural_out, net_graphs):
     line_list = []
     for g in net_graphs:
         points = []
-        successors = dict(nx.bfs_successors(g, 0))
+        successors = dict(nx.bfs_successors(g, list(g.nodes)[0]))
         for n in g.nodes:
             if n not in successors:
                 successors[n] = []
